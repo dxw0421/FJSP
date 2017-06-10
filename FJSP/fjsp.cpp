@@ -48,10 +48,21 @@ class Instance
 public:
 	int m, n;	// m and n are the number of machines and jobs
 	int avg_num_mach_per_oper;	// average number of machines per operation.
+	string file_input;
 	vector<JobInfo*> job_vec;
 	Instance(string);
+	void display_instance();
 };
-Instance::Instance(string file_input)
+class Solution
+{
+public:
+	
+};
+class Solver
+{
+	
+};
+Instance::Instance(string _file_input):file_input(_file_input)
 {
 	ifstream ifs(file_input);
 	if (!ifs.is_open())
@@ -86,6 +97,27 @@ Instance::Instance(string file_input)
 	}
 	ifs.close();
 }
+void Instance::display_instance()
+{
+	cout << "***display instance: " << file_input << "***" << endl;
+	cout << n << "\t" << m << "\t" << avg_num_mach_per_oper << endl;
+	for (vector<JobInfo*>::iterator job_iter = job_vec.begin();
+	job_iter != job_vec.end(); job_iter++)
+	{
+		cout << (*job_iter)->num_oper <<" | ";
+		for (vector<Operation*>::iterator oper_iter = (*job_iter)->oper_vec.begin();
+		oper_iter != (*job_iter)->oper_vec.end(); oper_iter++)
+		{
+			cout << (*oper_iter)->num_mach << " : ";
+			for (vector<Process*>::iterator proc_iter = (*oper_iter)->proc_vec.begin();
+			proc_iter != (*oper_iter)->proc_vec.end(); proc_iter++)
+			{
+				cout << (*proc_iter)->mach << "\t" << (*proc_iter)->t << "\t";
+			}
+		}
+		cout << endl;
+	}
+}
 int main(int argc, char **argv)
 {
 	char *argv_win[] = { "",	// 0
@@ -101,6 +133,7 @@ int main(int argc, char **argv)
 	for (int i = 1; i < argc; i += 2)
 		argv_map[string(argv[i])] = string(argv[i + 1]);
 	Instance *ins = new Instance(argv_map.at("_ifp") + argv_map.at("_ifn") + ".fjs");
+	ins->display_instance();
 #ifdef _WIN32
 	system("pause");
 #endif
