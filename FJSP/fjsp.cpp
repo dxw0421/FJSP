@@ -63,10 +63,9 @@ public:
 	{
 	public:
 		int mach, start_time, end_time;
-		Operation *pre_job_oper, *next_job_oper;
 		Operation *pre_mach_oper, *next_mach_oper;
 		const int job_i, oper_i;	// the job and operation index of this operation
-		Operation(int _j, int _o, int _et) :end_time(_et), job_i(_j), oper_i(_o) {}
+		Operation(int _j, int _o, int _et) :end_time(_et), job_i(_j), oper_i(_o), pre_mach_oper(NULL), next_mach_oper(NULL) {}
 	};
 	class JobInfo
 	{
@@ -74,10 +73,16 @@ public:
 		vector<Operation*> oper_vec;
 	};
 	vector<JobInfo*> job_vec;
-	vector<Operation*>oper_mach_vec;	// the operations assigned at each machine
+	vector<Operation*>head_oper_mach_vec, tail_oper_mach_vec;	// the operations assigned at each machine
 	int makespan, makespan_mach;
-	Solution(int _m, int _mm) :makespan(_m), makespan_mach(_mm) {}
+	Operation *start_dummy_oper, *end_dummy_oper;
+	Solution(int, int);
 };
+Solution::Solution(int _m, int _mm) :makespan(_m), makespan_mach(_mm), start_dummy_oper(NULL), end_dummy_oper(NULL)
+{
+	start_dummy_oper = new Solution::Operation(0, 0, 0);
+	end_dummy_oper = new Solution::Operation(0, 0, 0);
+}
 class Solver
 {
 public:
@@ -94,16 +99,19 @@ Solver::Solver(const Instance &_instance,int _sol_num) :instance(_instance) ,sol
 	for (int i = 0; i <= sol_num; i++)
 	{
 		Solution *sol = new Solution(0, 0);
-		sol->oper_mach_vec.resize(instance.m + 1, NULL);	// the initial value is NULL
+		sol->head_oper_mach_vec.resize(instance.m + 1, NULL);	// the initial value is NULL
+		sol->tail_oper_mach_vec.resize(instance.m + 1, NULL);	// the initial value is NULL
 		sol->job_vec.push_back(NULL);	// the first element in job_vec is NULL
 		for (int j = 1; j < instance.job_vec.size(); j++)
 		{
 			Solution::JobInfo *jobinfo = new Solution::JobInfo();
-			for (int k = 0; k < instance.job_vec[j]->oper_vec.size(); k++)
+			jobinfo->oper_vec.push_back(sol->start_dummy_oper);	// the first element in oper_vec of this job is dummy operation
+			for (int k = 1; k < instance.job_vec[j]->oper_vec.size(); k++)
 			{
 				Solution::Operation *oper = new Solution::Operation(j, k, 0);
 				jobinfo->oper_vec.push_back(oper);
 			}
+			jobinfo->oper_vec.push_back(sol->end_dummy_oper);	// the last element in oper_vec of this job is dummy operation
 			sol->job_vec.push_back(jobinfo);
 		}
 		sol_vec.push_back(sol);
@@ -124,11 +132,12 @@ void Solver::display_solution(int sol_index)
 		}
 		cout << endl;
 	}	
-	for (int i = 1; i < sol_vec[sol_index]->oper_mach_vec.size(); i++)
+	// for each machine to display solution
+	for (int i = 1; i < sol_vec[sol_index]->head_oper_mach_vec.size(); i++)
 	{
 		cout << "m " << i << ": ";
-		Solution::Operation *oper_same_mach = sol_vec[sol_index]->oper_mach_vec[i];
-		while (oper_same_mach != NULL)
+		Solution::Operation *oper_same_mach = sol_vec[sol_index]->head_oper_mach_vec[i];
+		while (oper_same_mach->job_i != 0)
 		{
 			cout << oper_same_mach->job_i << ", " << oper_same_mach->oper_i << "\t"
 				<< oper_same_mach->start_time << "\t" << oper_same_mach->end_time << "\t";
@@ -136,10 +145,23 @@ void Solver::display_solution(int sol_index)
 		}
 		cout << endl;
 	}
+	// for each machine to display solution in reverse order
+	for (int i = 1; i < sol_vec[sol_index]->tail_oper_mach_vec.size(); i++)
+	{
+		cout << "m(R) " << i << ": ";
+		Solution::Operation *oper_same_mach = sol_vec[sol_index]->tail_oper_mach_vec[i];
+		while (oper_same_mach->job_i != 0)	// the last element in the list
+		{
+			cout << oper_same_mach->job_i << ", " << oper_same_mach->oper_i << "\t"
+				<< oper_same_mach->start_time << "\t" << oper_same_mach->end_time << "\t";
+			oper_same_mach = oper_same_mach->pre_mach_oper;
+		}
+		cout << endl;
+	}
 }
 void Solver::check_solution(int sol_index)const
 {
-	cout << "***check solution " << sol_index << endl;
+	cout << "***check solution " << sol_index << " ***" << endl;
 	for (int job_i = 1; job_i < sol_vec[sol_index]->job_vec.size(); job_i++)
 	{
 		if (sol_vec[sol_index]->job_vec[job_i]->oper_vec[0]->end_time != 0)
@@ -147,16 +169,16 @@ void Solver::check_solution(int sol_index)const
 			cout << "ERROR: the end time of dummy operation is not 0" << endl;
 			system("pause");
 		}
-		for (int oper_i = 1; oper_i < sol_vec[sol_index]->job_vec[job_i]->oper_vec.size(); oper_i++)
+		for (int oper_i = 1; oper_i <= instance.job_vec[job_i]->num_oper; oper_i++)
 		{
 			Solution::Operation *oper = sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_i];
-			if (oper->start_time != MAX(sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_i-1]->end_time, oper->pre_mach_oper->end_time))
+			if (oper->start_time != MAX(sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_i - 1]->end_time, oper->pre_mach_oper->end_time))
 			{
 				cout << "ERROR: the start time is not max of the end time of previous operations of same job and machine" << endl;
 				system("pause");
 			}
 			int proc_i_select = 0;
-			for (int proc_i = 1; proc_i < instance.job_vec[job_i]->oper_vec[oper_i]->proc_vec.size(); proc_i++)
+			for (int proc_i = 1; proc_i < instance.job_vec[job_i]->oper_vec[oper_i]->proc_vec.size(); proc_i++)	// optimize by adding the processing index
 			{
 				if (oper->mach == instance.job_vec[job_i]->oper_vec[oper_i]->proc_vec[proc_i]->mach)
 				{
@@ -176,11 +198,55 @@ void Solver::check_solution(int sol_index)const
 			}
 		}
 	}
+	// for each machine to check the solution
+	int max_ct = 0, max_ct_mach;
+	for (int mach_i = 1; mach_i < sol_vec[sol_index]->head_oper_mach_vec.size(); mach_i++)
+	{
+		Solution::Operation *oper = sol_vec[sol_index]->head_oper_mach_vec[mach_i];
+		while (oper->job_i != 0)
+		{
+			if (oper->start_time != MAX(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->end_time, oper->pre_mach_oper->end_time))
+			{
+				cout << "ERROR: the start time is not max of the end time of previous operations of same job and machine" << endl;
+				system("pause");
+			}
+			int proc_i_select = 0;
+			for (int proc_i = 1; proc_i < instance.job_vec[oper->job_i]->oper_vec[oper->oper_i]->proc_vec.size(); proc_i++)
+			{
+				if (oper->mach == instance.job_vec[oper->job_i]->oper_vec[oper->oper_i]->proc_vec[proc_i]->mach)
+				{
+					proc_i_select = proc_i;
+					break;
+				}
+			}
+			if (proc_i_select == 0)
+			{
+				cout << "ERROR: the assigned machine is wrong" << endl;
+				system("pause");
+			}
+			if (oper->end_time != oper->start_time + instance.job_vec[oper->job_i]->oper_vec[oper->oper_i]->proc_vec[proc_i_select]->t)
+			{
+				cout << "ERROR: the end time is not the start time plus its processing time" << endl;
+				system("pause");
+			}
+			if (max_ct < oper->end_time)
+			{
+				max_ct = oper->end_time;
+				max_ct_mach = oper->mach;
+			}
+			oper = oper->next_mach_oper;
+		}
+	}
+	if (sol_vec[sol_index]->makespan != max_ct || sol_vec[sol_index]->makespan_mach != max_ct_mach)
+	{
+		cout << "ERROR: makespan or makespan machine is wrong" << endl;
+		system("pause");
+	}
 }
 void Solver::init_solution(int sol_index)
 {
 	vector<int> mach_ct_vec(instance.job_vec.size(), 0);	// the completion time of each machine
-	vector<Solution::Operation*> last_oper_mach(instance.m + 1, new Solution::Operation(0, 0, 0));	// the last operation at each machine
+	vector<Solution::Operation*> last_oper_mach(instance.m + 1,sol_vec[sol_index]->start_dummy_oper);	// the last operation at each machine
 	vector<int> oper_to_assign_job(instance.job_vec.size(),1);	// the operation index needed to assign at each job
 	bool is_not_finished = true;
 	while (is_not_finished)
@@ -188,7 +254,7 @@ void Solver::init_solution(int sol_index)
 		is_not_finished = false;
 		for (int job_i = 1; job_i < instance.job_vec.size(); job_i++)	// All the operations of this job is completed
 		{
-			if (oper_to_assign_job[job_i] == 0)
+			if (oper_to_assign_job[job_i] == 0)	// All the operations of this job is completed
 				continue;
 			is_not_finished = true;
 			Instance::Operation *oper = instance.job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]];
@@ -214,10 +280,11 @@ void Solver::init_solution(int sol_index)
 				sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i] - 1]->end_time); 
 			sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]]->end_time = min_ct;
 			sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]]->pre_mach_oper = last_oper_mach[min_ct_mach];
-			sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]]->next_mach_oper = NULL;	// the next operation with the same machine is NULL
+			sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]]->next_mach_oper = sol_vec[sol_index]->end_dummy_oper;	// the next operation with the same machine is dummy end operation
 			mach_ct_vec[min_ct_mach] = min_ct;
-			if (sol_vec[sol_index]->oper_mach_vec[min_ct_mach] == NULL)	// assign the first operation to the machine
-				sol_vec[sol_index]->oper_mach_vec[min_ct_mach] = sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]];
+			sol_vec[sol_index]->tail_oper_mach_vec[min_ct_mach] = sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]];	// the tail operation assigned to the machine
+			if (sol_vec[sol_index]->head_oper_mach_vec[min_ct_mach] == NULL)	// assign the first operation to the machine
+				sol_vec[sol_index]->head_oper_mach_vec[min_ct_mach] = sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]];
 			if (last_oper_mach[min_ct_mach]->job_i != 0)	// this is not the first operation of the machine, assgin the next operation of the previous operation
 				sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]]->pre_mach_oper->next_mach_oper =
 				sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]];
