@@ -62,10 +62,11 @@ public:
 	class Operation
 	{
 	public:
-		int mach, start_time, end_time;
+		int mach, start_time, end_time, r, q;
 		Operation *pre_mach_oper, *next_mach_oper;
 		const int job_i, oper_i;	// the job and operation index of this operation
-		Operation(int _j, int _o, int _et) :end_time(_et), job_i(_j), oper_i(_o), pre_mach_oper(NULL), next_mach_oper(NULL) {}
+		int in_degree;
+		Operation(int _j, int _o, int _et) :end_time(_et), job_i(_j), oper_i(_o), pre_mach_oper(NULL), next_mach_oper(NULL), in_degree(2) {}
 	};
 	class JobInfo
 	{
@@ -82,35 +83,38 @@ Solution::Solution(int _m, int _mm) :makespan(_m), makespan_mach(_mm), start_dum
 {
 	start_dummy_oper = new Solution::Operation(0, 0, 0);
 	end_dummy_oper = new Solution::Operation(0, 0, 0);
+	start_dummy_oper->r = end_dummy_oper->q = 0;
 }
 class Solver
 {
 public:
 	int sol_num;
 	vector<Solution*> sol_vec;
-	const Instance &instance;
+	const Instance *instance;
 	Solver(const Instance &,int);
 	void init_solution(int);
+	void determine_critical_path(int);
 	void display_solution(int);
 	void check_solution(int)const;
 };
-Solver::Solver(const Instance &_instance,int _sol_num) :instance(_instance) ,sol_num(_sol_num)
+Solver::Solver(const Instance &_instance,int _sol_num) :instance(&_instance) ,sol_num(_sol_num)
 {
 	for (int i = 0; i <= sol_num; i++)
 	{
 		Solution *sol = new Solution(0, 0);
-		sol->head_oper_mach_vec.resize(instance.m + 1, NULL);	// the initial value is NULL
-		sol->tail_oper_mach_vec.resize(instance.m + 1, NULL);	// the initial value is NULL
+		sol->head_oper_mach_vec.resize(instance->m + 1, NULL);	// the initial value is NULL
+		sol->tail_oper_mach_vec.resize(instance->m + 1, NULL);	// the initial value is NULL
 		sol->job_vec.push_back(NULL);	// the first element in job_vec is NULL
-		for (int j = 1; j < instance.job_vec.size(); j++)
+		for (int j = 1; j < instance->job_vec.size(); j++)
 		{
 			Solution::JobInfo *jobinfo = new Solution::JobInfo();
 			jobinfo->oper_vec.push_back(sol->start_dummy_oper);	// the first element in oper_vec of this job is dummy operation
-			for (int k = 1; k < instance.job_vec[j]->oper_vec.size(); k++)
+			for (int k = 1; k < instance->job_vec[j]->oper_vec.size(); k++)
 			{
 				Solution::Operation *oper = new Solution::Operation(j, k, 0);
 				jobinfo->oper_vec.push_back(oper);
 			}
+			jobinfo->oper_vec[1]->in_degree -= 1;	// the degree of the first operation of the job is 1
 			jobinfo->oper_vec.push_back(sol->end_dummy_oper);	// the last element in oper_vec of this job is dummy operation
 			sol->job_vec.push_back(jobinfo);
 		}
@@ -169,7 +173,7 @@ void Solver::check_solution(int sol_index)const
 			cout << "ERROR: the end time of dummy operation is not 0" << endl;
 			system("pause");
 		}
-		for (int oper_i = 1; oper_i <= instance.job_vec[job_i]->num_oper; oper_i++)
+		for (int oper_i = 1; oper_i <= instance->job_vec[job_i]->num_oper; oper_i++)
 		{
 			Solution::Operation *oper = sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_i];
 			if (oper->start_time != MAX(sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_i - 1]->end_time, oper->pre_mach_oper->end_time))
@@ -178,9 +182,9 @@ void Solver::check_solution(int sol_index)const
 				system("pause");
 			}
 			int proc_i_select = 0;
-			for (int proc_i = 1; proc_i < instance.job_vec[job_i]->oper_vec[oper_i]->proc_vec.size(); proc_i++)	// optimize by adding the processing index
+			for (int proc_i = 1; proc_i < instance->job_vec[job_i]->oper_vec[oper_i]->proc_vec.size(); proc_i++)	// optimize by adding the processing index
 			{
-				if (oper->mach == instance.job_vec[job_i]->oper_vec[oper_i]->proc_vec[proc_i]->mach)
+				if (oper->mach == instance->job_vec[job_i]->oper_vec[oper_i]->proc_vec[proc_i]->mach)
 				{
 					proc_i_select = proc_i;
 					break;
@@ -191,7 +195,7 @@ void Solver::check_solution(int sol_index)const
 				cout << "ERROR: the assigned machine is wrong" << endl;
 				system("pause");
 			}
-			if (oper->end_time != oper->start_time + instance.job_vec[job_i]->oper_vec[oper_i]->proc_vec[proc_i_select]->t)
+			if (oper->end_time != oper->start_time + instance->job_vec[job_i]->oper_vec[oper_i]->proc_vec[proc_i_select]->t)
 			{
 				cout << "ERROR: the end time is not the start time plus its processing time" << endl;
 				system("pause");
@@ -211,9 +215,9 @@ void Solver::check_solution(int sol_index)const
 				system("pause");
 			}
 			int proc_i_select = 0;
-			for (int proc_i = 1; proc_i < instance.job_vec[oper->job_i]->oper_vec[oper->oper_i]->proc_vec.size(); proc_i++)
+			for (int proc_i = 1; proc_i < instance->job_vec[oper->job_i]->oper_vec[oper->oper_i]->proc_vec.size(); proc_i++)
 			{
-				if (oper->mach == instance.job_vec[oper->job_i]->oper_vec[oper->oper_i]->proc_vec[proc_i]->mach)
+				if (oper->mach == instance->job_vec[oper->job_i]->oper_vec[oper->oper_i]->proc_vec[proc_i]->mach)
 				{
 					proc_i_select = proc_i;
 					break;
@@ -224,7 +228,7 @@ void Solver::check_solution(int sol_index)const
 				cout << "ERROR: the assigned machine is wrong" << endl;
 				system("pause");
 			}
-			if (oper->end_time != oper->start_time + instance.job_vec[oper->job_i]->oper_vec[oper->oper_i]->proc_vec[proc_i_select]->t)
+			if (oper->end_time != oper->start_time + instance->job_vec[oper->job_i]->oper_vec[oper->oper_i]->proc_vec[proc_i_select]->t)
 			{
 				cout << "ERROR: the end time is not the start time plus its processing time" << endl;
 				system("pause");
@@ -245,19 +249,19 @@ void Solver::check_solution(int sol_index)const
 }
 void Solver::init_solution(int sol_index)
 {
-	vector<int> mach_ct_vec(instance.job_vec.size(), 0);	// the completion time of each machine
-	vector<Solution::Operation*> last_oper_mach(instance.m + 1,sol_vec[sol_index]->start_dummy_oper);	// the last operation at each machine
-	vector<int> oper_to_assign_job(instance.job_vec.size(),1);	// the operation index needed to assign at each job
+	vector<int> mach_ct_vec(instance->job_vec.size(), 0);	// the completion time of each machine
+	vector<Solution::Operation*> last_oper_mach(instance->m + 1,sol_vec[sol_index]->start_dummy_oper);	// the last operation at each machine
+	vector<int> oper_to_assign_job(instance->job_vec.size(),1);	// the operation index needed to assign at each job
 	bool is_not_finished = true;
 	while (is_not_finished)
 	{
 		is_not_finished = false;
-		for (int job_i = 1; job_i < instance.job_vec.size(); job_i++)	// All the operations of this job is completed
+		for (int job_i = 1; job_i < instance->job_vec.size(); job_i++)	// All the operations of this job is completed
 		{
 			if (oper_to_assign_job[job_i] == 0)	// All the operations of this job is completed
 				continue;
 			is_not_finished = true;
-			Instance::Operation *oper = instance.job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]];
+			Instance::Operation *oper = instance->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]];
 			int min_ct = INT_MAX, min_ct_mach, equ_cnt = 1;
 			for (int proc_i = 1; proc_i < oper->proc_vec.size(); proc_i++)	// find the best machine which has the minimum completion time
 			{
@@ -284,23 +288,45 @@ void Solver::init_solution(int sol_index)
 			mach_ct_vec[min_ct_mach] = min_ct;
 			sol_vec[sol_index]->tail_oper_mach_vec[min_ct_mach] = sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]];	// the tail operation assigned to the machine
 			if (sol_vec[sol_index]->head_oper_mach_vec[min_ct_mach] == NULL)	// assign the first operation to the machine
+			{
 				sol_vec[sol_index]->head_oper_mach_vec[min_ct_mach] = sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]];
+				sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]]->in_degree -= 1;	// the degree of the first opertion at the machine is 1
+			}
 			if (last_oper_mach[min_ct_mach]->job_i != 0)	// this is not the first operation of the machine, assgin the next operation of the previous operation
 				sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]]->pre_mach_oper->next_mach_oper =
 				sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]];
 			last_oper_mach[min_ct_mach] = sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]];	// update the last operation at this machine
 			oper_to_assign_job[job_i] += 1;	// the next operation is to be assigned
-			if (oper_to_assign_job[job_i] >= instance.job_vec[job_i]->oper_vec.size())
+			if (oper_to_assign_job[job_i] >= instance->job_vec[job_i]->oper_vec.size())
 				oper_to_assign_job[job_i] = 0;	// All the operations of this job is completed
 		}
 	}
-	for (int i = 1; i <= instance.m; i++)
+	for (int i = 1; i <= instance->m; i++)
 	{
 		if (sol_vec[sol_index]->makespan < mach_ct_vec[i])
 		{
 			sol_vec[sol_index]->makespan = mach_ct_vec[i];
 			sol_vec[sol_index]->makespan_mach = i;
 		}
+	}
+}
+void Solver::determine_critical_path(int sol_index)
+{
+	cout << "***solution " << sol_index << ", critical path***" << endl;
+	vector<Solution::Operation *> oper_in_degree_vec;
+	for (int mach_i = 1; mach_i < sol_vec[sol_index]->head_oper_mach_vec.size(); mach_i++)
+	{
+		Solution::Operation *oper = sol_vec[sol_index]->head_oper_mach_vec[mach_i];
+		if (oper->in_degree==0)	// or oper->oper_i == 1, which means the first operation at this job, in-degree is 0 
+			oper_in_degree_vec.push_back(oper);
+	}
+	while (oper_in_degree_vec.size() != 0)
+	{
+		Solution::Operation *oper = oper_in_degree_vec.front();
+		cout << oper->job_i << ", " << oper->oper_i << "\t"
+			<< oper->start_time << "\t" << oper->end_time << "\t";
+		if(oper->next_mach_oper)
+		oper_in_degree_vec.erase(oper_in_degree_vec.begin());	// delete the first element
 	}
 }
 Instance::Instance(string _file_input):file_input(_file_input)
@@ -383,6 +409,7 @@ int main(int argc, char **argv)
 	solver->init_solution(1);
 	solver->display_solution(1);
 	solver->check_solution(1);
+	solver->determine_critical_path(1);
 #ifdef _WIN32
 	system("pause");
 #endif
