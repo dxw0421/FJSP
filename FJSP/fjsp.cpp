@@ -50,7 +50,8 @@ public:
 	};
 
 	int m, n;	// m and n are the number of machines and jobs
-	int avg_num_mach_per_oper;	// average number of machines per operation.
+	int avg_num_mach_per_oper;	// average number of machines per operation
+	int total_num_operation;//
 	string file_input;
 	vector<JobInfo*> job_vec;
 	Instance(string);
@@ -62,7 +63,7 @@ public:
 	class Operation
 	{
 	public:
-		int mach, start_time, end_time, r, q;
+		int proc_i, mach, t, start_time, end_time, r, q;
 		Operation *pre_mach_oper, *next_mach_oper;
 		const int job_i, oper_i;	// the job and operation index of this operation
 		int in_degree;
@@ -84,6 +85,7 @@ Solution::Solution(int _m, int _mm) :makespan(_m), makespan_mach(_mm), start_dum
 	start_dummy_oper = new Solution::Operation(0, 0, 0);
 	end_dummy_oper = new Solution::Operation(0, 0, 0);
 	start_dummy_oper->r = end_dummy_oper->q = 0;
+	start_dummy_oper->in_degree = end_dummy_oper->in_degree = 0;
 }
 class Solver
 {
@@ -181,21 +183,12 @@ void Solver::check_solution(int sol_index)const
 				cout << "ERROR: the start time is not max of the end time of previous operations of same job and machine" << endl;
 				system("pause");
 			}
-			int proc_i_select = 0;
-			for (int proc_i = 1; proc_i < instance->job_vec[job_i]->oper_vec[oper_i]->proc_vec.size(); proc_i++)	// optimize by adding the processing index
-			{
-				if (oper->mach == instance->job_vec[job_i]->oper_vec[oper_i]->proc_vec[proc_i]->mach)
-				{
-					proc_i_select = proc_i;
-					break;
-				}
-			}
-			if (proc_i_select == 0)
+			if (oper->proc_i == 0)
 			{
 				cout << "ERROR: the assigned machine is wrong" << endl;
 				system("pause");
 			}
-			if (oper->end_time != oper->start_time + instance->job_vec[job_i]->oper_vec[oper_i]->proc_vec[proc_i_select]->t)
+			if (oper->end_time != oper->start_time + instance->job_vec[job_i]->oper_vec[oper_i]->proc_vec[oper->proc_i]->t)
 			{
 				cout << "ERROR: the end time is not the start time plus its processing time" << endl;
 				system("pause");
@@ -262,7 +255,7 @@ void Solver::init_solution(int sol_index)
 				continue;
 			is_not_finished = true;
 			Instance::Operation *oper = instance->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]];
-			int min_ct = INT_MAX, min_ct_mach, equ_cnt = 1;
+			int min_ct = INT_MAX, min_ct_mach, select_proc_i, equ_cnt = 1;
 			for (int proc_i = 1; proc_i < oper->proc_vec.size(); proc_i++)	// find the best machine which has the minimum completion time
 			{
 				int cur_mach_ct = oper->proc_vec[proc_i]->t + MAX(mach_ct_vec[oper->proc_vec[proc_i]->mach],	// the next operation with the same machine
@@ -270,16 +263,22 @@ void Solver::init_solution(int sol_index)
 				if (cur_mach_ct < min_ct)
 				{
 					min_ct = cur_mach_ct;
+					select_proc_i = proc_i;
 					min_ct_mach = oper->proc_vec[proc_i]->mach;
 				}
 				else if (cur_mach_ct== min_ct)
 				{
 					equ_cnt += 1;
 					if (rand() % equ_cnt)
+					{
+						select_proc_i = proc_i;
 						min_ct_mach = oper->proc_vec[proc_i]->mach;
+					}
 				}
 			}
+			sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]]->proc_i = select_proc_i;
 			sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]]->mach = min_ct_mach;
+			sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]]->t = oper->proc_vec[select_proc_i]->t;
 			sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]]->start_time = MAX(mach_ct_vec[min_ct_mach],
 				sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i] - 1]->end_time); 
 			sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]]->end_time = min_ct;
@@ -320,16 +319,30 @@ void Solver::determine_critical_path(int sol_index)
 		if (oper->in_degree==0)	// or oper->oper_i == 1, which means the first operation at this job, in-degree is 0 
 			oper_in_degree_vec.push_back(oper);
 	}
-	while (oper_in_degree_vec.size() != 0)
+	int num_oper_visited = 0;
+	while (!oper_in_degree_vec.empty())
 	{
 		Solution::Operation *oper = oper_in_degree_vec.front();
-		cout << oper->job_i << ", " << oper->oper_i << "\t"
+		cout << oper->job_i << ", " << oper->oper_i << "\t" << oper->mach << "\t"
 			<< oper->start_time << "\t" << oper->end_time << "\t";
-		if(oper->next_mach_oper)
+		oper->r = MAX(oper->pre_mach_oper->r + oper->pre_mach_oper->t,
+			sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i-1]->r + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i-1]->t);
+		if (oper->r != oper->start_time)
+			cout << endl;
+		num_oper_visited += 1;
+		oper->next_mach_oper->in_degree -= 1;	// minus the in-degree of next operation at the same machine by 1
+		sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1]->in_degree -= 1;	// minus the in-degree of next operation of the same job by 1
+		if (oper->next_mach_oper->in_degree == 0)
+			oper_in_degree_vec.push_back(oper->next_mach_oper);
+		if (sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1]->in_degree == 0 &&
+			oper->next_mach_oper != sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1])	// avoid the next machine operation is the same as the next job operation
+			oper_in_degree_vec.push_back(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1]);
 		oper_in_degree_vec.erase(oper_in_degree_vec.begin());	// delete the first element
 	}
+	if (num_oper_visited != instance->total_num_operation)
+		cout << "ERROR: not all operations are visited" << endl;
 }
-Instance::Instance(string _file_input):file_input(_file_input)
+Instance::Instance(string _file_input):file_input(_file_input),total_num_operation(0)
 {
 	ifstream ifs(file_input);
 	if (!ifs.is_open())
@@ -351,6 +364,7 @@ Instance::Instance(string _file_input):file_input(_file_input)
 		jobinfo->oper_vec.push_back(NULL);	// the first element in oper_vec is NULL
 		int field_cnt = 0;
 		jobinfo->num_oper = stoi(fields_vec[field_cnt++]);	// number of operation
+		total_num_operation += jobinfo->num_oper;
 		for (int i = 0; i < jobinfo->num_oper; i++)	// for each operation
 		{
 			Operation *oper = new Operation();
@@ -392,7 +406,7 @@ int main(int argc, char **argv)
 {
 	char *argv_win[] = { "",	// 0
 		"_ifp", "instances\\Dauzere_Data\\",
-		"_ifn", "01a",
+		"_ifn", "02a",
 		"_sol_num", "5"
 	};
 	cout << "This is the flexible job shop scheduling problem" << endl;
