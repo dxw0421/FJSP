@@ -354,9 +354,15 @@ void Solver::determine_critical_path(int sol_index)
 			critical_oper_stack.push(oper);
 	}
 	cout << "critical operations: ";
+	int pre_mach = !critical_oper_stack.empty() ? critical_oper_stack.top()->mach : 0;
 	while (!critical_oper_stack.empty())
 	{
 		Solution::Operation *oper = critical_oper_stack.top();
+		if (oper->mach != pre_mach)
+		{
+			cout << endl;
+			pre_mach = oper->mach;
+		}
 		cout << oper->job_i << ", " << oper->oper_i << "\t" << oper->mach << "\t"
 			<< oper->start_time << "\t" << oper->end_time << "\t";
 		critical_oper_stack.pop();
