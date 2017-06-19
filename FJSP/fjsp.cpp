@@ -64,7 +64,7 @@ public:
 	class Operation
 	{
 	public:
-		int proc_i, mach, t, start_time, end_time, r, q;	// optimize by removing proc_i or mach and t
+		int proc_i, mach, t, start_time, end_time, r, q, apx_r, apx_q;	// optimize by removing proc_i or mach and t
 		Operation *pre_mach_oper, *next_mach_oper;
 		const int job_i, oper_i;	// the job and operation index of this operation
 		int in_degree;
@@ -93,12 +93,16 @@ class Solver
 public:
 	int sol_num;
 	vector<Solution*> sol_vec;
+	vector<Solution::Operation*> critical_block_vec;
 	const Instance *instance;
+
 	Solver(const Instance &,int);
 	void init_solution(int);
 	void determine_critical_path(int);
 	void display_solution(int);
 	void check_solution(int)const;
+	void backward_insert_move(int);
+	void try_backward_insert_move(Solution::Operation*, Solution::Operation*);
 };
 Solver::Solver(const Instance &_instance,int _sol_num) :instance(&_instance) ,sol_num(_sol_num)
 {
@@ -354,21 +358,68 @@ void Solver::determine_critical_path(int sol_index)
 			critical_oper_stack.push(oper);
 	}
 	cout << "critical operations: ";
-	int pre_mach = !critical_oper_stack.empty() ? critical_oper_stack.top()->mach : 0;
+	Solution::Operation *pre_oper = !critical_oper_stack.empty() ? critical_oper_stack.top(): NULL, *cur_oper;
+	critical_block_vec.push_back(pre_oper);
 	while (!critical_oper_stack.empty())
 	{
-		Solution::Operation *oper = critical_oper_stack.top();
-		if (oper->mach != pre_mach)
+		cur_oper = critical_oper_stack.top();
+		if (cur_oper->mach != pre_oper->mach)
 		{
 			cout << endl;
-			pre_mach = oper->mach;
+			critical_block_vec.push_back(pre_oper);
+			critical_block_vec.push_back(cur_oper);
 		}
-		cout << oper->job_i << ", " << oper->oper_i << "\t" << oper->mach << "\t"
-			<< oper->start_time << "\t" << oper->end_time << "\t";
+		pre_oper = cur_oper;
+		cout << cur_oper->job_i << ", " << cur_oper->oper_i << "\t" << cur_oper->mach << "\t"
+			<< cur_oper->start_time << "\t" << cur_oper->end_time << "\t";
 		critical_oper_stack.pop();
 	}
+	critical_block_vec.push_back(cur_oper);
 	if (num_oper_visited != instance->total_num_operation)
 		cout << "ERROR: not all operations are visited" << endl;
+}
+void Solver::try_backward_insert_move(Solution::Operation *oper_u, Solution::Operation *oper_v)
+{
+
+}
+void Solver::backward_insert_move(int sol_index)
+{
+	cout << "swap move" << endl;
+	for (vector<Solution::Operation *>::iterator oper_iter = critical_block_vec.begin(); oper_iter != critical_block_vec.end(); oper_iter+=2)
+	{
+		for (Solution::Operation * oper_u = *oper_iter; oper_u != *(oper_iter + 1); oper_u = oper_u->next_mach_oper)
+		{
+			for (Solution::Operation * oper_v = oper_u->next_mach_oper;; oper_v = oper_v->next_mach_oper)	// move u behind v
+			{
+				if (oper_v->q >= sol_vec[sol_index]->job_vec[oper_u->job_i]->oper_vec[oper_u->oper_i + 1]->q &&	// q[v]>=q[JS[u]]
+					oper_v->job_i != sol_vec[sol_index]->job_vec[oper_u->job_i]->oper_vec[oper_u->oper_i + 1]->job_i)	// u, v do not belong to the same job
+				{
+					cout << oper_u->job_i << "*, " << oper_u->oper_i << "\t"
+						<< oper_v->job_i << ", " << oper_v->oper_i << "\t";
+					Solution::Operation *oper = oper_u->next_mach_oper;
+					oper->apx_r = MAX(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->r + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->t,
+						oper_u->pre_mach_oper->r + oper_u->t);
+					if (oper_u->next_mach_oper != oper_v)	// there has at least 3 operations
+					{
+						for (Solution::Operation *oper = oper_u->next_mach_oper->next_mach_oper;; oper = oper->next_mach_oper)
+						{
+							oper->apx_r = MAX(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->t + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->t,
+								oper->pre_mach_oper->apx_r + oper->pre_mach_oper->t);
+							if (oper == oper_v)
+								break;
+						}
+					}
+					oper_u->apx_r = MAX(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->t + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->t,
+						oper_v->apx_r + oper_v->t);
+				}
+				if (oper_v == *(oper_iter + 1))	// optimize by removing this condition into for loop
+					break;
+			}
+			cout << endl;
+		}
+		cout << endl;
+	}
+	Solution::Operation *oper = critical_block_vec.front();
 }
 Instance::Instance(string _file_input):file_input(_file_input),total_num_operation(0)
 {
@@ -452,6 +503,7 @@ int main(int argc, char **argv)
 	solver->display_solution(1);
 	solver->check_solution(1);
 	solver->determine_critical_path(1);
+	solver->backward_insert_move(1);
 #ifdef _WIN32
 	system("pause");
 #endif
