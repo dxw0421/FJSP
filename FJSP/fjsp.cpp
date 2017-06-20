@@ -102,7 +102,8 @@ public:
 	void display_solution(int);
 	void check_solution(int)const;
 	void backward_insert_move(int);
-	void try_backward_insert_move(Solution::Operation*, Solution::Operation*);
+	void try_backward_insert_move(int, int&,Solution::Operation*, Solution::Operation*);
+	void backward_insert(int, Solution::Operation*, Solution::Operation*,vector<int>&,vector<int>&,int);
 };
 Solver::Solver(const Instance &_instance,int _sol_num) :instance(&_instance) ,sol_num(_sol_num)
 {
@@ -374,43 +375,114 @@ void Solver::determine_critical_path(int sol_index)
 			<< cur_oper->start_time << "\t" << cur_oper->end_time << "\t";
 		critical_oper_stack.pop();
 	}
+	cout << endl;
 	critical_block_vec.push_back(cur_oper);
 	if (num_oper_visited != instance->total_num_operation)
 		cout << "ERROR: not all operations are visited" << endl;
 }
-void Solver::try_backward_insert_move(Solution::Operation *oper_u, Solution::Operation *oper_v)
+void Solver::try_backward_insert_move(int sol_index,int &makespan,Solution::Operation *oper_u, Solution::Operation *oper_v)
 {
+	if (oper_u->job_i == 9 && oper_u->oper_i == 3 && oper_v->job_i == 3 && oper_v->oper_i == 4)
+		cout << endl;
+	Solution::Operation *oper = oper_u->next_mach_oper;
+	oper->apx_r = MAX(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->r + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->t,
+		oper_u->pre_mach_oper->r + oper_u->pre_mach_oper->t);
+	if (oper_u->next_mach_oper != oper_v)	// there has at least 3 operations
+	{
+		for (oper = oper_u->next_mach_oper->next_mach_oper;; oper = oper->next_mach_oper)
+		{
+			oper->apx_r = MAX(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->r + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->t,
+				oper->pre_mach_oper->apx_r + oper->pre_mach_oper->t);
+			if (oper == oper_v)
+				break;
+		}
+	}
+	oper_u->apx_r = MAX(sol_vec[sol_index]->job_vec[oper_u->job_i]->oper_vec[oper_u->oper_i - 1]->r + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->t,
+		oper_v->apx_r + oper_v->t);
 
+	oper_u->apx_q = MAX(sol_vec[sol_index]->job_vec[oper_u->job_i]->oper_vec[oper_u->oper_i + 1]->q + sol_vec[sol_index]->job_vec[oper_u->job_i]->oper_vec[oper_u->oper_i + 1]->t,
+		oper_v->next_mach_oper->q + oper_v->next_mach_oper->t);
+	oper_v->apx_q = MAX(sol_vec[sol_index]->job_vec[oper_v->job_i]->oper_vec[oper_v->oper_i + 1]->q + sol_vec[sol_index]->job_vec[oper_v->job_i]->oper_vec[oper_v->oper_i + 1]->t,
+		oper_u->apx_q + oper_u->t);
+	oper = oper_v->pre_mach_oper;
+	if (oper_v->pre_mach_oper != oper_u)	// there has at least 3 operations
+	{
+		for (;; oper = oper->pre_mach_oper)
+		{
+			oper->apx_q = MAX(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1]->q + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1]->t,
+				oper->next_mach_oper->apx_q + oper->next_mach_oper->t);
+			if (oper == oper_u)
+				break;
+		}
+	}
+	makespan = 0;
+	for (oper = oper_u;; oper = oper->next_mach_oper)
+	{
+		if (oper->apx_r + oper->apx_q + oper->t > makespan)
+			makespan = oper->apx_r + oper->apx_q + oper->t;
+		if (oper == oper_v)	// optimize by removing this condition into for loop
+			break;
+	}
+	cout << makespan << "\t";
+}
+void Solver::backward_insert(int sol_index, Solution::Operation *oper_u, Solution::Operation *oper_v, vector<int> &r_vec, vector<int> &q_vec,int min_makespan)
+{
+	int i = 0;
+	for (Solution::Operation *oper = oper_u;; oper = oper->next_mach_oper, i++)
+	{
+		oper->r = r_vec[i];
+		oper->q = q_vec[i];
+		if (oper == oper_v)
+			break;
+	}
+	oper_u->pre_mach_oper->next_mach_oper = oper_u->next_mach_oper;
+	oper_u->next_mach_oper->pre_mach_oper = oper_u->pre_mach_oper;	// for removing u
+	oper_u->next_mach_oper = oper_v->next_mach_oper;
+	oper_v->next_mach_oper->pre_mach_oper = oper_u;
+	oper_v->next_mach_oper = oper_u;
+	oper_u->pre_mach_oper = oper_v;	// for adding u
+
+	oper_u->start_time = oper_u->r;
+	oper_u->end_time = oper_u->start_time + oper_u->t;
+	oper_v->start_time = oper_v->r;
+	oper_v->end_time = oper_v->start_time + oper_v->t;
+
+	sol_vec[sol_index]->makespan = min_makespan;
 }
 void Solver::backward_insert_move(int sol_index)
 {
-	cout << "swap move" << endl;
+	cout << "swap move, solution " << sol_index << ", " << sol_vec[sol_index]->makespan << endl;
+	vector<int> r_vec, q_vec;
+	Solution::Operation *min_oper_u = NULL, *min_oper_v = NULL;
+	int  min_makespan = INT_MAX;
 	for (vector<Solution::Operation *>::iterator oper_iter = critical_block_vec.begin(); oper_iter != critical_block_vec.end(); oper_iter+=2)
 	{
-		for (Solution::Operation * oper_u = *oper_iter; oper_u != *(oper_iter + 1); oper_u = oper_u->next_mach_oper)
+		for (Solution::Operation *oper_u = *oper_iter; oper_u != *(oper_iter + 1); oper_u = oper_u->next_mach_oper)
 		{
-			for (Solution::Operation * oper_v = oper_u->next_mach_oper;; oper_v = oper_v->next_mach_oper)	// move u behind v
+			for (Solution::Operation *oper_v = oper_u->next_mach_oper;; oper_v = oper_v->next_mach_oper)	// move u behind v
 			{
 				if (oper_v->q >= sol_vec[sol_index]->job_vec[oper_u->job_i]->oper_vec[oper_u->oper_i + 1]->q &&	// q[v]>=q[JS[u]]
 					oper_v->job_i != sol_vec[sol_index]->job_vec[oper_u->job_i]->oper_vec[oper_u->oper_i + 1]->job_i)	// u, v do not belong to the same job
 				{
 					cout << oper_u->job_i << "*, " << oper_u->oper_i << "\t"
 						<< oper_v->job_i << ", " << oper_v->oper_i << "\t";
-					Solution::Operation *oper = oper_u->next_mach_oper;
-					oper->apx_r = MAX(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->r + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->t,
-						oper_u->pre_mach_oper->r + oper_u->t);
-					if (oper_u->next_mach_oper != oper_v)	// there has at least 3 operations
+					int makespan;
+					try_backward_insert_move(sol_index, makespan, oper_u, oper_v);
+					if (makespan < sol_vec[sol_index]->makespan&&
+						makespan<min_makespan)
 					{
-						for (Solution::Operation *oper = oper_u->next_mach_oper->next_mach_oper;; oper = oper->next_mach_oper)
+						min_makespan = makespan;
+						min_oper_u = oper_u;
+						min_oper_v = oper_v;
+						r_vec.resize(0), q_vec.resize(0);
+						for (Solution::Operation *oper = oper_u;; oper = oper->next_mach_oper)
 						{
-							oper->apx_r = MAX(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->t + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->t,
-								oper->pre_mach_oper->apx_r + oper->pre_mach_oper->t);
+							r_vec.push_back(oper->apx_r);
+							q_vec.push_back(oper->apx_q);
 							if (oper == oper_v)
 								break;
 						}
 					}
-					oper_u->apx_r = MAX(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->t + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->t,
-						oper_v->apx_r + oper_v->t);
 				}
 				if (oper_v == *(oper_iter + 1))	// optimize by removing this condition into for loop
 					break;
@@ -419,7 +491,13 @@ void Solver::backward_insert_move(int sol_index)
 		}
 		cout << endl;
 	}
-	Solution::Operation *oper = critical_block_vec.front();
+	cout << "The best move: ";
+	cout << min_oper_u->job_i << "*, " << min_oper_u->oper_i << "\t"
+		<< min_oper_v->job_i << ", " << min_oper_v->oper_i << "\t"
+		<< min_makespan<<"\t"
+		<< endl;
+	backward_insert(sol_index, min_oper_u, min_oper_v, r_vec, q_vec, min_makespan);
+	check_solution(sol_index);
 }
 Instance::Instance(string _file_input):file_input(_file_input),total_num_operation(0)
 {
