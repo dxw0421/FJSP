@@ -5,6 +5,7 @@
 #include<stack>
 #include<map>
 #include<string>
+#include<set>
 using namespace std;
 #define MAX(x,y) ((x)>(y)?(x):(y))
 template<typename T>
@@ -104,6 +105,8 @@ public:
 	void backward_insert_move(int);
 	void try_backward_insert_move(int, int&,Solution::Operation*, Solution::Operation*);
 	void backward_insert(int, Solution::Operation*, Solution::Operation*,vector<int>&,vector<int>&,int);
+	void backward_insert1(int, Solution::Operation*, Solution::Operation*, vector<int>&, vector<int>&, int);
+	void calculate_obj(int);
 };
 Solver::Solver(const Instance &_instance,int _sol_num) :instance(&_instance) ,sol_num(_sol_num)
 {
@@ -324,7 +327,7 @@ void Solver::determine_critical_path(int sol_index)
 	for (int mach_i = 1; mach_i < sol_vec[sol_index]->head_oper_mach_vec.size(); mach_i++)
 	{
 		Solution::Operation *oper = sol_vec[sol_index]->head_oper_mach_vec[mach_i];
-		if (oper->in_degree==0)	// or oper->oper_i == 1, which means the first operation at this job, in-degree is 0 
+		if (oper->in_degree==0)	// or oper->oper_i == 1, which means the first operation at this job, in-degree is 0, optimize by removing in_degree
 			oper_in_degree_vec.push_back(oper);
 	}
 	int num_oper_visited = 0;
@@ -336,7 +339,9 @@ void Solver::determine_critical_path(int sol_index)
 		oper->r = MAX(oper->pre_mach_oper->r + oper->pre_mach_oper->t,
 			sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i-1]->r + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i-1]->t);
 		if (oper->r != oper->start_time)
-			cout << endl;
+		{
+			system("pause");
+		}
 		num_oper_visited += 1;
 		oper->next_mach_oper->in_degree -= 1;	// minus the in-degree of next operation at the same machine by 1
 		sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1]->in_degree -= 1;	// minus the in-degree of next operation of the same job by 1
@@ -382,7 +387,7 @@ void Solver::determine_critical_path(int sol_index)
 }
 void Solver::try_backward_insert_move(int sol_index,int &makespan,Solution::Operation *oper_u, Solution::Operation *oper_v)
 {
-	if (oper_u->job_i == 9 && oper_u->oper_i == 3 && oper_v->job_i == 3 && oper_v->oper_i == 4)
+	if (oper_u->job_i == 4 && oper_u->oper_i == 8 && oper_v->job_i == 5 && oper_v->oper_i == 8)
 		cout << endl;
 	Solution::Operation *oper = oper_u->next_mach_oper;
 	oper->apx_r = MAX(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->r + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->t,
@@ -397,7 +402,7 @@ void Solver::try_backward_insert_move(int sol_index,int &makespan,Solution::Oper
 				break;
 		}
 	}
-	oper_u->apx_r = MAX(sol_vec[sol_index]->job_vec[oper_u->job_i]->oper_vec[oper_u->oper_i - 1]->r + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->t,
+	oper_u->apx_r = MAX(sol_vec[sol_index]->job_vec[oper_u->job_i]->oper_vec[oper_u->oper_i - 1]->r + sol_vec[sol_index]->job_vec[oper_u->job_i]->oper_vec[oper_u->oper_i - 1]->t,
 		oper_v->apx_r + oper_v->t);
 
 	oper_u->apx_q = MAX(sol_vec[sol_index]->job_vec[oper_u->job_i]->oper_vec[oper_u->oper_i + 1]->q + sol_vec[sol_index]->job_vec[oper_u->job_i]->oper_vec[oper_u->oper_i + 1]->t,
@@ -432,6 +437,8 @@ void Solver::backward_insert(int sol_index, Solution::Operation *oper_u, Solutio
 	{
 		oper->r = r_vec[i];
 		oper->q = q_vec[i];
+		oper->start_time = oper->r;
+		oper->end_time = oper->start_time + oper->t;
 		if (oper == oper_v)
 			break;
 	}
@@ -449,12 +456,98 @@ void Solver::backward_insert(int sol_index, Solution::Operation *oper_u, Solutio
 
 	sol_vec[sol_index]->makespan = min_makespan;
 }
+void Solver::backward_insert1(int sol_index, Solution::Operation *oper_u, Solution::Operation *oper_v, vector<int> &r_vec, vector<int> &q_vec, int min_makespan)
+{
+	int i = 0;
+	for (Solution::Operation *oper = oper_u;; oper = oper->next_mach_oper, i++)
+	{
+		oper->r = r_vec[i];
+		oper->q = q_vec[i];
+		oper->start_time = oper->r;
+		oper->end_time = oper->start_time + oper->t;
+		if (oper == oper_v)
+			break;
+	}
+	oper_u->pre_mach_oper->next_mach_oper = oper_u->next_mach_oper;
+	oper_u->next_mach_oper->pre_mach_oper = oper_u->pre_mach_oper;	// for removing u
+	oper_u->next_mach_oper = oper_v->next_mach_oper;
+	oper_v->next_mach_oper->pre_mach_oper = oper_u;
+	oper_v->next_mach_oper = oper_u;
+	oper_u->pre_mach_oper = oper_v;	// for adding u
+
+	oper_u->start_time = oper_u->r;
+	oper_u->end_time = oper_u->start_time + oper_u->t;
+	oper_v->start_time = oper_v->r;
+	oper_v->end_time = oper_v->start_time + oper_v->t;
+
+	sol_vec[sol_index]->makespan = min_makespan;
+
+	// from v to traverse the graph, calculate r
+	set<Solution::Operation*>next_oper_set;
+	next_oper_set.insert(oper_v);
+	set<Solution::Operation*>::iterator iter_cur_oper = next_oper_set.begin();
+	while (next_oper_set.size() != 0)
+	{
+		Solution::Operation *oper = *iter_cur_oper;
+		set<Solution::Operation*>::iterator iter_s = next_oper_set.find(oper->pre_mach_oper);
+		if (iter_s != next_oper_set.end())
+		{
+			iter_cur_oper ++;
+			continue;
+		}
+		iter_s = next_oper_set.find(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]);
+		if (iter_s != next_oper_set.end())
+		{
+			iter_cur_oper++;
+			continue;
+		}
+		oper->r = MAX(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->r + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->t,
+			oper->pre_mach_oper->r + oper->pre_mach_oper->t);
+		if (oper->next_mach_oper != sol_vec[sol_index]->end_dummy_oper)
+			next_oper_set.insert(oper->next_mach_oper);
+		if (sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1] != sol_vec[sol_index]->end_dummy_oper)
+			next_oper_set.insert(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1]);
+		oper->start_time = oper->r;
+		oper->end_time = oper->start_time + oper->t;
+		next_oper_set.erase(iter_cur_oper);
+	}
+
+	// from u to reverse traverse the graph, calculate q
+	next_oper_set.insert(oper_u);
+	iter_cur_oper = next_oper_set.begin();
+	while (next_oper_set.size() != 0)
+	{
+		Solution::Operation *oper = *iter_cur_oper;
+		set<Solution::Operation*>::iterator iter_s = next_oper_set.find(oper->next_mach_oper);
+		if (iter_s != next_oper_set.end())
+		{
+			iter_cur_oper++;
+			continue;
+		}
+		iter_s = next_oper_set.find(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1]);
+		if (iter_s != next_oper_set.end())
+		{
+			iter_cur_oper++;
+			continue;
+		}
+		oper->q = MAX(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1]->q + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1]->t,
+			oper->next_mach_oper->q + oper->next_mach_oper->t);
+		if (oper->pre_mach_oper != sol_vec[sol_index]->start_dummy_oper)
+			next_oper_set.insert(oper->pre_mach_oper);
+		if (sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1] != sol_vec[sol_index]->start_dummy_oper)
+			next_oper_set.insert(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]);
+		next_oper_set.erase(iter_cur_oper);
+	}
+
+
+}
 void Solver::backward_insert_move(int sol_index)
 {
 	cout << "swap move, solution " << sol_index << ", " << sol_vec[sol_index]->makespan << endl;
 	vector<int> r_vec, q_vec;
 	Solution::Operation *min_oper_u = NULL, *min_oper_v = NULL;
 	int  min_makespan = INT_MAX;
+	bool temp_first_improve = true;
 	for (vector<Solution::Operation *>::iterator oper_iter = critical_block_vec.begin(); oper_iter != critical_block_vec.end(); oper_iter+=2)
 	{
 		for (Solution::Operation *oper_u = *oper_iter; oper_u != *(oper_iter + 1); oper_u = oper_u->next_mach_oper)
@@ -469,8 +562,9 @@ void Solver::backward_insert_move(int sol_index)
 					int makespan;
 					try_backward_insert_move(sol_index, makespan, oper_u, oper_v);
 					if (makespan < sol_vec[sol_index]->makespan&&
-						makespan<min_makespan)
+						makespan < min_makespan&&temp_first_improve)
 					{
+						temp_first_improve = false;
 						min_makespan = makespan;
 						min_oper_u = oper_u;
 						min_oper_v = oper_v;
@@ -496,8 +590,94 @@ void Solver::backward_insert_move(int sol_index)
 		<< min_oper_v->job_i << ", " << min_oper_v->oper_i << "\t"
 		<< min_makespan<<"\t"
 		<< endl;
-	backward_insert(sol_index, min_oper_u, min_oper_v, r_vec, q_vec, min_makespan);
+	backward_insert1(sol_index, min_oper_u, min_oper_v, r_vec, q_vec, min_makespan);
 	check_solution(sol_index);
+	calculate_obj(sol_index);
+	check_solution(sol_index);
+}
+void Solver::calculate_obj(int sol_index)
+{
+	cout << "calculate makespan of solution " << sol_index << endl;
+	vector<Solution::Operation *> oper_in_degree_vec;	// store operations with in-degree of 0
+	stack<Solution::Operation*> oper_re_top_order_stack;	// store operations in stack to get re-topological order
+	stack<Solution::Operation*> critical_oper_stack;	// store critical operations
+	// only know the assignment and sort to calculate makespan, determine the degree of each operation first
+	for (int mach_i = 1; mach_i < sol_vec[sol_index]->head_oper_mach_vec.size(); mach_i++)
+	{
+		Solution::Operation *oper = sol_vec[sol_index]->head_oper_mach_vec[mach_i];
+		if (oper->oper_i == 1)	// or oper->oper_i == 1, which means the first operation at this job, in-degree is 0, optimize by removing in_degree
+		{
+			oper->in_degree = 0;
+			oper_in_degree_vec.push_back(oper);
+		}
+		else
+			oper->in_degree = 1;
+		oper = oper->next_mach_oper;
+		while (oper!=sol_vec[sol_index]->end_dummy_oper)
+		{
+			if (oper->oper_i == 1)
+				oper->in_degree = 1;
+			else
+				oper->in_degree = 2;
+			oper = oper->next_mach_oper;
+		}
+	}
+	int num_oper_visited = 0;
+	sol_vec[sol_index]->makespan = 0;
+	while (!oper_in_degree_vec.empty())
+	{
+		Solution::Operation *oper = oper_in_degree_vec.front();
+		oper->r = MAX(oper->pre_mach_oper->r + oper->pre_mach_oper->t,
+			sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->r + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i - 1]->t);
+		oper->start_time = oper->r;
+		oper->end_time = oper->start_time + oper->t;
+		num_oper_visited += 1;
+		oper->next_mach_oper->in_degree -= 1;	// minus the in-degree of next operation at the same machine by 1
+		sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1]->in_degree -= 1;	// minus the in-degree of next operation of the same job by 1
+		if (oper->next_mach_oper->in_degree == 0)
+			oper_in_degree_vec.push_back(oper->next_mach_oper);
+		if (sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1]->in_degree == 0 &&
+			oper->next_mach_oper != sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1])	// avoid the next machine operation is the same as the next job operation
+			oper_in_degree_vec.push_back(sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1]);
+		oper_re_top_order_stack.push(oper_in_degree_vec.front());	// push the first element into stack
+		oper_in_degree_vec.erase(oper_in_degree_vec.begin());	// delete the first element
+		if (oper->end_time > sol_vec[sol_index]->makespan)
+			sol_vec[sol_index]->makespan = oper->end_time;
+		cout << oper->job_i << ", " << oper->oper_i << "\t" << oper->mach << "\t"
+			<< oper->start_time << "\t" << oper->end_time << "\t";
+	}
+	cout << endl;
+	while (!oper_re_top_order_stack.empty())
+	{
+		Solution::Operation *oper = oper_re_top_order_stack.top();
+		oper->q = MAX(oper->next_mach_oper->q + oper->next_mach_oper->t,
+			sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1]->q + sol_vec[sol_index]->job_vec[oper->job_i]->oper_vec[oper->oper_i + 1]->t);
+		oper_re_top_order_stack.pop();
+		if (oper->r + oper->q + oper->t == sol_vec[sol_index]->makespan)
+			critical_oper_stack.push(oper);
+	}
+	cout << "critical operations: ";
+	Solution::Operation *pre_oper = !critical_oper_stack.empty() ? critical_oper_stack.top() : NULL, *cur_oper;
+	critical_block_vec.clear();
+	critical_block_vec.push_back(pre_oper);
+	while (!critical_oper_stack.empty())
+	{
+		cur_oper = critical_oper_stack.top();
+		if (cur_oper->mach != pre_oper->mach)
+		{
+			cout << endl;
+			critical_block_vec.push_back(pre_oper);
+			critical_block_vec.push_back(cur_oper);
+		}
+		pre_oper = cur_oper;
+		cout << cur_oper->job_i << ", " << cur_oper->oper_i << "\t" << cur_oper->mach << "\t"
+			<< cur_oper->start_time << "\t" << cur_oper->end_time << "\t";
+		critical_oper_stack.pop();
+	}
+	cout << endl;
+	critical_block_vec.push_back(cur_oper);
+	if (num_oper_visited != instance->total_num_operation)
+		cout << "ERROR: not all operations are visited" << endl;
 }
 Instance::Instance(string _file_input):file_input(_file_input),total_num_operation(0)
 {
