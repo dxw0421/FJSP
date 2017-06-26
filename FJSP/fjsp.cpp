@@ -2,6 +2,7 @@
 #include<iostream>
 #include<fstream>
 #include<vector>
+#include<list>
 #include<stack>
 #include<map>
 #include<string>
@@ -75,8 +76,15 @@ public:
 	public:
 		vector<Operation*> oper_vec;
 	};
+	class Tabu 
+	{
+	public:
+		int tabu_iteration;	// the tabu iteration
+		vector<Operation *> tabu_oper_vec;	// the tabu block of operations from u to v
+	};
 	vector<JobInfo*> job_vec;
 	vector<Operation*>head_oper_mach_vec, tail_oper_mach_vec;	// the operations assigned at each machine
+	list<Tabu*> tabu_list;
 	int makespan, makespan_mach;
 	Operation *start_dummy_oper, *end_dummy_oper;
 	Solution(int, int);
@@ -96,7 +104,8 @@ public:
 	vector<Solution::Operation*> critical_block_vec;
 	const Instance *instance;
 
-	int best_imp;
+	int tt0, d1, d2;	// for tabu tenure
+	int best_makespan;
 
 	Solver(const Instance &,int);
 	void init_solution(int);
@@ -109,7 +118,10 @@ public:
 	void try_forward_insert_move(int, int&, Solution::Operation*, Solution::Operation*);
 	void backward_insert(int, Solution::Operation*, Solution::Operation*);
 	void forward_insert(int, Solution::Operation*, Solution::Operation*);
+	void update_tabu(int, Solution::Operation*, Solution::Operation*,int);
+	bool check_tabu(int, Solution::Operation*, Solution::Operation*, int);
 	void calculate_qr(int);
+	void display_machine_operation(int, int);
 };
 Solver::Solver(const Instance &_instance,int _sol_num) :instance(&_instance) ,sol_num(_sol_num)
 {
@@ -448,15 +460,46 @@ void Solver::forward_insert(int sol_index, Solution::Operation *oper_u, Solution
 	oper_v->next_mach_oper = oper_u;
 	oper_u->pre_mach_oper = oper_v;
 }
+void Solver::update_tabu(int sol_index, Solution::Operation *oper_u, Solution::Operation *oper_v,int cur_iter)
+{
+	Solution::Tabu *tabu = new Solution::Tabu();
+	tabu->tabu_iteration = cur_iter + MAX(rand() / ((sol_vec[sol_index]->makespan - best_makespan) / d1), d2);
+	for (Solution::Operation *oper = oper_u; oper != oper_v->next_mach_oper; oper = oper->next_mach_oper)
+		tabu->tabu_oper_vec.push_back(oper);
+	sol_vec[sol_index]->tabu_vec.push_back(tabu);
+}
+bool Solver::check_tabu(int sol_index, Solution::Operation *oper_u, Solution::Operation *oper_v, int cur_iter)
+{
+	Solution::Tabu *tabu = new Solution::Tabu();
+	tabu->tabu_iteration = cur_iter + MAX(rand() / ((sol_vec[sol_index]->makespan - best_makespan) / d1), d2);
+	for (Solution::Operation *oper = oper_u; oper != oper_v->next_mach_oper; oper = oper->next_mach_oper)
+		tabu->tabu_oper_vec.push_back(oper);
+	sol_vec[sol_index]->tabu_vec.push_back(tabu);
+	for (vector<Solution::Tabu*>::iterator tabu_iter = sol_vec[sol_index]->tabu_vec.begin();
+		tabu_iter != sol_vec[sol_index]->tabu_vec.end();)
+	{
+		if (cur_iter >= (*tabu_iter)->tabu_iteration) // not tabu status
+		{
+
+		}
+		else
+		{
+			tabu_iter++;
+		}
+
+	}
+	return true;
+}
 void Solver::backward_insert_move(int sol_index)
 {
 	cout << "swap move, solution " << sol_index << ", " << sol_vec[sol_index]->makespan << endl;
 	Solution::Operation *min_oper_u = NULL, *min_oper_v = NULL;
-	int  min_makespan = INT_MAX, equ_cnt;
+	int  min_makespan, equ_cnt;
 	bool still_improve = true;
 	while (still_improve)
 	{
 		still_improve = false;
+		min_makespan = INT_MAX;
 		for (vector<Solution::Operation *>::iterator oper_iter = critical_block_vec.begin(); oper_iter != critical_block_vec.end(); oper_iter += 2)
 		{
 			for (Solution::Operation *oper_u = *oper_iter; oper_u != *(oper_iter + 1); oper_u = oper_u->next_mach_oper)
@@ -477,7 +520,7 @@ void Solver::backward_insert_move(int sol_index)
 							min_oper_v = oper_v;
 							equ_cnt = 1;
 						}
-						else if (makespan < min_makespan)
+						else if (makespan == min_makespan)
 						{
 							equ_cnt += 1;
 							if (rand() % equ_cnt)
@@ -497,31 +540,38 @@ void Solver::backward_insert_move(int sol_index)
 		if (min_makespan == INT_MAX)	// still_improve==false
 			continue;
 		cout << "The best move: ";
-		cout << min_oper_u->job_i << "*, " << min_oper_u->oper_i << "\t"
+		cout << min_oper_u->job_i << ", " << min_oper_u->oper_i << "\t"
 			<< min_oper_v->job_i << ", " << min_oper_v->oper_i << "\t"
-			<< min_makespan << "\t";
-		if (min_makespan < sol_vec[sol_index]->makespan)
-		{
-			backward_insert(sol_index, min_oper_u, min_oper_v);
-			still_improve = true;
-		}
-		else
-			still_improve = false;
+			<< min_makespan << endl;
+		int pre_obj = sol_vec[sol_index]->makespan;
+		display_machine_operation(sol_index, min_oper_u->mach);
+		backward_insert(sol_index, min_oper_u, min_oper_v);
 		calculate_qr(sol_index);
+		if (pre_obj > sol_vec[sol_index]->makespan)
+			still_improve = true;		
+		display_machine_operation(sol_index, min_oper_u->mach);
 		cout << sol_vec[sol_index]->makespan << endl;
 		check_solution(sol_index);
 	}
+}
+void Solver::display_machine_operation(int sol_index, int mach_index)
+{
+	cout << "solution " << sol_index << ", machine " << mach_index << ", operations: ";
+	for (Solution::Operation *iter_oper = sol_vec[sol_index]->head_oper_mach_vec[mach_index]; 
+		iter_oper != sol_vec[sol_index]->end_dummy_oper; iter_oper = iter_oper->next_mach_oper)
+		cout << iter_oper->job_i << ", " << iter_oper->oper_i << "\t";
+	cout << endl;
 }
 void Solver::insert_move(int sol_index)
 {
 	cout << "swap move, solution " << sol_index << ", " << sol_vec[sol_index]->makespan << endl;
 	Solution::Operation *min_oper_u = NULL, *min_oper_v = NULL;
-	int  min_makespan = INT_MAX, equ_cnt;
-	bool temp_first_improve = true, still_improve = true,is_backward_insert;
+	int  min_makespan, equ_cnt;
+	bool temp_first_improve = true, still_improve = true,is_backward_insert;	// optimize by removing temp_first_improve
 	while (still_improve)
 	{
 		still_improve = false;
-
+		min_makespan = INT_MAX;
 		for (vector<Solution::Operation *>::iterator oper_iter = critical_block_vec.begin(); oper_iter != critical_block_vec.end() && temp_first_improve; oper_iter += 2)
 		{
 			for (Solution::Operation *oper_u = *oper_iter; oper_u != *(oper_iter + 1) && temp_first_improve; oper_u = oper_u->next_mach_oper)
@@ -537,8 +587,7 @@ void Solver::insert_move(int sol_index)
 						try_backward_insert_move(sol_index, makespan, oper_u, oper_v);
 						if (makespan < min_makespan)
 						{
-							if (best_imp)
-								temp_first_improve = false;
+							temp_first_improve = false;
 							min_makespan = makespan;
 							min_oper_u = oper_u;
 							min_oper_v = oper_v;
@@ -579,8 +628,7 @@ void Solver::insert_move(int sol_index)
 						try_forward_insert_move(sol_index, makespan, oper_u, oper_v);
 						if (makespan < min_makespan)
 						{
-							if (best_imp)
-								temp_first_improve = false;
+							temp_first_improve = false;
 							min_makespan = makespan;
 							min_oper_u = oper_u;
 							min_oper_v = oper_v;
@@ -600,7 +648,6 @@ void Solver::insert_move(int sol_index)
 						}
 						//cout << makespan << "\t";
 					}
-
 				}
 				//cout << endl;
 			}
@@ -608,7 +655,6 @@ void Solver::insert_move(int sol_index)
 		}
 		if (min_makespan == INT_MAX)
 			continue;
-
 		cout << "The best move: ";
 		cout << min_oper_u->job_i << "*, " << min_oper_u->oper_i << "\t"
 			<< min_oper_v->job_i << ", " << min_oper_v->oper_i << "\t"
@@ -773,7 +819,7 @@ int main(int argc, char **argv)
 		"_ifp", "instances\\Dauzere_Data\\",
 		"_ifn", "01a",
 		"_sol_num", "5",
-		"_first_imp","0"
+		"_tt0","2", "_d1","5", "_d2", "12"
 	};
 	cout << "This is the flexible job shop scheduling problem" << endl;
 #ifdef _WIN32
@@ -786,7 +832,9 @@ int main(int argc, char **argv)
 	Instance *ins = new Instance(argv_map.at("_ifp") + argv_map.at("_ifn") + ".fjs");
 	//ins->display_instance();
 	Solver *solver = new Solver(*ins, stoi(argv_map.at("_sol_num")));
-	solver->best_imp = stoi(argv_map.at("_first_imp"));
+	solver->tt0 = stoi(argv_map.at("_tt0"));
+	solver->d1 = stoi(argv_map.at("_d1"));
+	solver->d2 = stoi(argv_map.at("_d2"));
 	solver->init_solution(1);
 	//solver->display_solution(1);
 	solver->check_solution(1);
