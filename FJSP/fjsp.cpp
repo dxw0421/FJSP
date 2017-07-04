@@ -127,7 +127,7 @@ public:
 	void backward_insert(int, Solution::Operation*, Solution::Operation*);
 	void forward_insert(int, Solution::Operation*, Solution::Operation*);
 	void update_tabu(int, int, int, Solution::Operation*, Solution::Operation*);
-	bool check_tabu(int, int, int, list<Solution::Operation*>&);
+	bool check_tabu(int, int, int, int, Solution::Operation*, Solution::Operation*,MOVE_TYPE);
 	void calculate_qr_obj(int);
 	void perturb(int, int);
 };
@@ -656,11 +656,10 @@ void Solver::update_tabu(int sol_index, int cur_iter, int mach_pos, Solution::Op
 		tabu->tabu_oper_vec.push_back(oper);
 	sol_vec[sol_index]->tabu_list.push_back(tabu);
 }
-bool Solver::check_tabu(int sol_index, int cur_iter, int first_oper_mach_pos, list<Solution::Operation*>& oper_list)// if u and v in tabu, return true, else return false
+bool Solver::check_tabu(int sol_index, int cur_iter, int oper_u_pos,int oper_v_pos, Solution::Operation* oper_u, Solution::Operation* oper_v,MOVE_TYPE move_type)// if u and v in tabu, return true, else return false
 {
-	//if (cur_iter == 655 && oper_list.front()->job_i == 24 /*&& oper_list.front()->oper_i == 15
-	//	&& oper_list.back()->job_i == 23 && oper_list.back()->oper_i == 15*/)
-	//	cout << endl;
+	/*if (cur_iter == 151 && oper_u_pos==4&&oper_v_pos==5)
+		cout << endl;*/
 	for (list<Solution::Tabu*>::iterator tabu_iter = sol_vec[sol_index]->tabu_list.begin();
 		tabu_iter != sol_vec[sol_index]->tabu_list.end();)
 	{
@@ -670,35 +669,184 @@ bool Solver::check_tabu(int sol_index, int cur_iter, int first_oper_mach_pos, li
 			tabu_iter = sol_vec[sol_index]->tabu_list.erase(tabu_iter);
 			continue;
 		}
-		if ((*tabu_iter)->tabu_oper_vec.front()->mach != oper_list.front()->mach)	// not the same machine
+		if ((*tabu_iter)->tabu_oper_vec.front()->mach != oper_u->mach)	// not the same machine
 		{
 			tabu_iter++;
 			continue;
 		}
 		// in tabu status
-		if (first_oper_mach_pos <= (*tabu_iter)->mach_pos &&
-			first_oper_mach_pos+oper_list.size() >= (*tabu_iter)->mach_pos + (*tabu_iter)->tabu_oper_vec.size())
+		int f_pos = (*tabu_iter)->mach_pos;
+		int e_pos = (*tabu_iter)->mach_pos + (*tabu_iter)->tabu_oper_vec.size() - 1;
+		if (oper_u_pos > e_pos || oper_v_pos < f_pos)
 		{
-			bool is_same = true;
-			list<Solution::Operation *>::iterator oper_w = oper_list.begin();
-			int pos_u = first_oper_mach_pos;
-			while (pos_u != (*tabu_iter)->mach_pos)	// move oper_w to the position
+			tabu_iter++;
+			continue;
+		}
+		bool is_same = true;
+		if (move_type == BACKWARD_INSERT)
+		{
+			if (f_pos < oper_u_pos)
 			{
-				pos_u += 1;
-				oper_w++;
-			}
-			for (vector<Solution::Operation*>::iterator tb_iter = (*tabu_iter)->tabu_oper_vec.begin();
-				tb_iter != (*tabu_iter)->tabu_oper_vec.end(); tb_iter++, oper_w++)
-			{
-				if (*tb_iter != *oper_w)
+				Solution::Operation *cur_oper = oper_u;
+				for (int i = oper_u_pos - f_pos -1; i >= 0; i -= 1)
 				{
-					is_same = false;
-					break;
+					cur_oper = cur_oper->pre_mach_oper;
+					if ((*tabu_iter)->tabu_oper_vec[i] != cur_oper)
+					{
+						is_same = false;
+						break;
+					}
+				}
+				if (is_same)
+				{
+					for (int i = oper_u_pos - f_pos; i < (*tabu_iter)->tabu_oper_vec.size(); i++)
+					{
+						if (i == oper_u_pos - f_pos)
+							cur_oper = oper_u->next_mach_oper;
+						else if (i > oper_u_pos - f_pos&&i < oper_v_pos - f_pos)
+							cur_oper = cur_oper->next_mach_oper;
+						else if (i == oper_v_pos - f_pos)
+							cur_oper = oper_u;
+						else
+							cur_oper = cur_oper->next_job_oper;
+						if ((*tabu_iter)->tabu_oper_vec[i] != cur_oper)
+						{
+							is_same = false;
+							break;
+						}
+						if (i == oper_v_pos - f_pos)
+							cur_oper = oper_v;
+					}
 				}
 			}
-			if (is_same)
-				return true;
+			else if (f_pos == oper_u_pos)
+			{
+				Solution::Operation *cur_oper = oper_u;
+				for (int i = 0; i < (*tabu_iter)->tabu_oper_vec.size(); i++)
+				{
+					if (f_pos + i < oper_v_pos)
+						cur_oper = cur_oper->next_mach_oper;
+					else if (f_pos + i == oper_v_pos)
+						cur_oper = oper_u;
+					else
+						cur_oper = cur_oper->next_job_oper;
+					if ((*tabu_iter)->tabu_oper_vec[i] != cur_oper)
+					{
+						is_same = false;
+						break;
+					}
+					if (f_pos + i == oper_v_pos)
+						cur_oper = oper_v;
+				}
+			}
+			else //if (f_pos > oper_u_pos)
+			{
+				Solution::Operation *cur_oper = oper_u;
+				for (int i = 0; i < f_pos - oper_u_pos; i += 1)
+					cur_oper = cur_oper->next_mach_oper;
+				for (int i = 0; i < (*tabu_iter)->tabu_oper_vec.size(); i++)
+				{
+					if (f_pos + i < oper_v_pos)
+						cur_oper = cur_oper->next_mach_oper;
+					else if (f_pos + i == oper_v_pos)
+						cur_oper = oper_u;
+					else
+						cur_oper = cur_oper->next_job_oper;
+					if ((*tabu_iter)->tabu_oper_vec[i] != cur_oper)
+					{
+						is_same = false;
+						break;
+					}
+					if (f_pos + i == oper_v_pos)
+						cur_oper = oper_v;
+				}
+			}
 		}
+		else //	if (move_type == FORWARD_INSERT)
+		{
+			if (f_pos < oper_u_pos)
+			{
+				Solution::Operation *cur_oper = oper_u;
+				for (int i = oper_u_pos - f_pos - 1; i >= 0; i -= 1)
+				{
+					cur_oper = cur_oper->pre_mach_oper;
+					if ((*tabu_iter)->tabu_oper_vec[i] != cur_oper)
+					{
+						is_same = false;
+						break;
+					}
+				}
+				if (is_same)
+				{
+					int i = oper_u_pos - f_pos;
+					if ((*tabu_iter)->tabu_oper_vec[i] != oper_v)	// v not the smae
+						is_same = false;
+					if (is_same)
+					{
+						i += 1;
+						if (i < (*tabu_iter)->tabu_oper_vec.size()&&(*tabu_iter)->tabu_oper_vec[i] != oper_u)	// u not the same
+							is_same = false;
+						if (is_same)
+						{
+							i += 1;
+							cur_oper = oper_u->next_mach_oper;
+							for (; i < (*tabu_iter)->tabu_oper_vec.size(); i++)
+							{
+								if ((*tabu_iter)->tabu_oper_vec[i] != cur_oper)
+								{
+									is_same = false;
+									break;
+								}
+								cur_oper = cur_oper->next_mach_oper;
+							}
+						}
+					}
+				}
+			}
+			else if (f_pos == oper_u_pos)
+			{
+				int i = 0;
+				if ((*tabu_iter)->tabu_oper_vec[i] != oper_v)
+					is_same = false;
+				if(is_same)
+				{
+					i += 1;
+					if ((*tabu_iter)->tabu_oper_vec[i] != oper_u)
+						is_same = false;
+					if (is_same)
+					{
+						i += 1;
+						Solution::Operation *cur_oper = oper_u->next_mach_oper;
+						for (; i < (*tabu_iter)->tabu_oper_vec.size(); i++)
+						{
+							if ((*tabu_iter)->tabu_oper_vec[i] != cur_oper)
+							{
+								is_same = false;
+								break;
+							}
+							cur_oper = cur_oper->next_mach_oper;
+						}
+					}
+				}
+			}
+			else  //if (f_pos > oper_u_pos)
+			{
+				Solution::Operation *cur_oper = oper_u;
+				for (int i = 0; i < f_pos - oper_u_pos - 1; i += 1)
+					cur_oper = cur_oper->next_mach_oper;
+				for (int i = 0; i < (*tabu_iter)->tabu_oper_vec.size(); i++)
+				{
+					if ((*tabu_iter)->tabu_oper_vec[i] != cur_oper)
+					{
+						is_same = false;
+						break;
+					}
+					cur_oper = cur_oper->next_mach_oper;
+				}
+			}
+		}
+		if (is_same)
+			return true;
 		tabu_iter++;
 	}
 	return false;
@@ -847,29 +995,26 @@ void Solver::insert_move(int sol_index)
 	{
 		min_makespan = INT_MAX;
 		int critical_block_pos = 0;
-		if (cur_iter == 4321)
+		if (cur_iter == 3527)
 		{
 			cout << endl;
-			display_machine_operation(sol_index, 2);
+			display_machine_operation(sol_index, 3);
 		}
 		for (vector<Solution::Operation *>::iterator oper_iter = critical_block_vec.begin(); oper_iter != critical_block_vec.end(); oper_iter += 2,critical_block_pos+=2)
 		{
 			Solution::Operation *oper_u = *oper_iter;	// move u behind v
-			list<Solution::Operation*> u_list;
-			u_list.push_back(oper_u);
-			for (Solution::Operation *oper_v = oper_u->next_mach_oper; oper_v != (*(oper_iter + 1))->next_mach_oper; oper_v = oper_v->next_mach_oper)
+			int oper_v_pos = critical_block_mach_pos_vec[critical_block_pos] + 1;
+			for (Solution::Operation *oper_v = oper_u->next_mach_oper; oper_v != (*(oper_iter + 1))->next_mach_oper; oper_v = oper_v->next_mach_oper, oper_v_pos += 1)
 			{
-				u_list.push_back(oper_v);
 				if (oper_v->q >= oper_u->next_job_oper->q &&	// q[v]>=q[JS[u]]
 					oper_v->job_i != oper_u->job_i)	// u, v do not belong to the same job
 				{
 					/*cout << oper_u->job_i << "*, " << oper_u->oper_i << "\t"
 					<< oper_v->job_i << ", " << oper_v->oper_i << "\t";*/
-					u_list.push_back(oper_u);
-					u_list.pop_front();	// remove u
 					int makespan;
 					try_backward_insert_move(sol_index, makespan, oper_u, oper_v);
-					if (makespan <= min_makespan && !check_tabu(sol_index, cur_iter, critical_block_mach_pos_vec[critical_block_pos], u_list))
+					if (makespan <= min_makespan &&(makespan<alg_best_makespan || 
+						!check_tabu(sol_index, cur_iter, critical_block_mach_pos_vec[critical_block_pos],oper_v_pos, oper_u, oper_v, BACKWARD_INSERT)))
 					{
 						if (makespan < min_makespan)
 						{
@@ -892,31 +1037,19 @@ void Solver::insert_move(int sol_index)
 							}
 						}
 					}
-					else if (makespan < min_makespan && makespan < alg_best_makespan)
-					{
-						min_makespan = makespan;
-						min_oper_u = oper_u;
-						min_oper_v = oper_v;
-						min_oper_mach_pos = critical_block_mach_pos_vec[critical_block_pos];
-						move_type = BACKWARD_INSERT;
-						equ_cnt = 1;
-					}
-					u_list.push_front(oper_u);	// insert u
-					u_list.pop_back();
 					//cout << makespan << "\t";
 				}
 				// move v before u
 				if (oper_u->r + oper_u->t >= oper_v->pre_job_oper->r + oper_v->pre_job_oper->t &&	// r[u]+t[u]>=r[JP[v]]+t[JP[v]]
 					oper_v->job_i != oper_u->job_i)	// u, v do not belong to the same job
 				{
-					u_list.push_front(oper_v);
-					u_list.pop_back();	// remove v
 					/*cout << oper_u->job_i << "*, " << oper_u->oper_i << "\t"
 					<< oper_v->job_i << ", " << oper_v->oper_i << "\t";*/
 					int makespan;
 					try_forward_insert_move(sol_index, makespan, oper_u, oper_v);
-					if (makespan <= min_makespan && (/*makespan < min_makespan&&makespan < sol_vec[sol_index]->makespan||*/
-						 !check_tabu(sol_index, cur_iter, critical_block_mach_pos_vec[critical_block_pos], u_list)))
+					if (makespan <= min_makespan && (makespan<alg_best_makespan ||
+						!check_tabu(sol_index, cur_iter, critical_block_mach_pos_vec[critical_block_pos],
+							oper_v_pos, oper_u, oper_v, FORWARD_INSERT)))
 					{
 						if (makespan < min_makespan)
 						{
@@ -939,47 +1072,33 @@ void Solver::insert_move(int sol_index)
 							}
 						}
 					}
-					else if (makespan < min_makespan && makespan < alg_best_makespan)
-					{
-						min_makespan = makespan;
-						min_oper_u = oper_u;
-						min_oper_v = oper_v;
-						min_oper_mach_pos = critical_block_mach_pos_vec[critical_block_pos];
-						move_type = FORWARD_INSERT;
-						equ_cnt = 1;
-					}
-					u_list.push_back(oper_v);
-					u_list.pop_front();
 					//cout << makespan << "\t";
 				}
 				//cout << endl;
 			}
 			//cout << endl;
+			if ((*oper_iter)->next_mach_oper == *(oper_iter + 1))
+				continue;
 			Solution::Operation *oper_v = *(oper_iter + 1);
-			list<Solution::Operation*> v_list;
-			v_list.push_front(oper_v);
-			int u_mach_pos = critical_block_mach_pos_vec[critical_block_pos + 1] - 1;
-			for (Solution::Operation *oper_u = oper_v->pre_mach_oper; oper_u != *oper_iter; oper_u = oper_u->pre_mach_oper, u_mach_pos -= 1)
+			int oper_u_pos = critical_block_mach_pos_vec[critical_block_pos] + 1;
+			for (Solution::Operation *oper_u = (*oper_iter)->next_mach_oper; oper_u != oper_v; oper_u = oper_u->next_mach_oper, oper_u_pos += 1)
 			{
-				v_list.push_front(oper_u);
 				if (oper_v->q >= oper_u->next_job_oper->q &&	// q[v]>=q[JS[u]]
 					oper_v->job_i != oper_u->job_i)	// u, v do not belong to the same job
 				{
-					v_list.push_back(oper_u);
-					v_list.pop_front();
 					/*cout << oper_u->job_i << "*, " << oper_u->oper_i << "\t"
 					<< oper_v->job_i << ", " << oper_v->oper_i << "\t";*/
 					int makespan;
 					try_backward_insert_move(sol_index, makespan, oper_u, oper_v);
-					if (makespan <= min_makespan && (/*makespan < min_makespan&&makespan < sol_vec[sol_index]->makespan ||*/
-						!check_tabu(sol_index, cur_iter, u_mach_pos, v_list)))
+					if (makespan <= min_makespan && (makespan<alg_best_makespan||
+						!check_tabu(sol_index, cur_iter,oper_u_pos, critical_block_mach_pos_vec[critical_block_pos+1],oper_u,oper_v,BACKWARD_INSERT)))
 					{
 						if (makespan < min_makespan)
 						{
 							min_makespan = makespan;
 							min_oper_u = oper_u;
 							min_oper_v = oper_v;
-							min_oper_mach_pos = u_mach_pos;
+							min_oper_mach_pos = oper_u_pos;
 							move_type = BACKWARD_INSERT;
 							equ_cnt = 1;
 						}
@@ -990,43 +1109,30 @@ void Solver::insert_move(int sol_index)
 							{
 								min_oper_u = oper_u;
 								min_oper_v = oper_v;
-								min_oper_mach_pos = u_mach_pos;
+								min_oper_mach_pos = oper_u_pos;
 								move_type = BACKWARD_INSERT;
 							}
 						}
 					}
-					else if (makespan < min_makespan && makespan < alg_best_makespan)
-					{
-						min_makespan = makespan;
-						min_oper_u = oper_u;
-						min_oper_v = oper_v;
-						min_oper_mach_pos = u_mach_pos;
-						move_type = BACKWARD_INSERT;
-						equ_cnt = 1;
-					}
-					v_list.push_front(oper_u);
-					v_list.pop_back();
 					//cout << makespan << "\t";
 				}
 				// move v before u
 				if (oper_u->r + oper_u->t >= oper_v->pre_job_oper->r + oper_v->pre_job_oper->t &&	// r[u]+t[u]>=r[JP[v]]+t[JP[v]]
 					oper_v->job_i != oper_u->job_i)	// u, v do not belong to the same job
 				{
-					v_list.push_front(oper_v);
-					v_list.pop_back();
 					/*cout << oper_u->job_i << "*, " << oper_u->oper_i << "\t"
 					<< oper_v->job_i << ", " << oper_v->oper_i << "\t";*/
 					int makespan;
 					try_forward_insert_move(sol_index, makespan, oper_u, oper_v);
-					if (makespan <= min_makespan && (/*makespan < min_makespan&&makespan < sol_vec[sol_index]->makespan||*/
-						!check_tabu(sol_index, cur_iter, u_mach_pos, v_list)))
+					if (makespan <= min_makespan && (makespan<alg_best_makespan ||
+						!check_tabu(sol_index, cur_iter, oper_u_pos, critical_block_mach_pos_vec[critical_block_pos + 1], oper_u, oper_v, FORWARD_INSERT)))
 					{
 						if (makespan < min_makespan)
 						{
 							min_makespan = makespan;
 							min_oper_u = oper_u;
 							min_oper_v = oper_v;
-							min_oper_mach_pos = u_mach_pos;
+							min_oper_mach_pos = oper_u_pos;
 							move_type = FORWARD_INSERT;
 							equ_cnt = 1;
 						}
@@ -1037,22 +1143,11 @@ void Solver::insert_move(int sol_index)
 							{
 								min_oper_u = oper_u;
 								min_oper_v = oper_v;
-								min_oper_mach_pos = u_mach_pos;
+								min_oper_mach_pos = oper_u_pos;
 								move_type = FORWARD_INSERT;
 							}
 						}
 					}
-					else if (makespan < min_makespan && makespan < alg_best_makespan)
-					{
-						min_makespan = makespan;
-						min_oper_u = oper_u;
-						min_oper_v = oper_v;
-						min_oper_mach_pos = u_mach_pos;
-						move_type = FORWARD_INSERT;
-						equ_cnt = 1;
-					}
-					v_list.push_back(oper_v);
-					v_list.pop_front();
 					//cout << makespan << "\t";
 				}
 				//cout << endl;
@@ -1075,8 +1170,8 @@ void Solver::insert_move(int sol_index)
 		else
 			forward_insert(sol_index, min_oper_u, min_oper_v);
 		calculate_qr_obj(sol_index);
-		if (cur_iter >= 4321 && cur_iter <= 4342)
-			display_machine_operation(sol_index, 2);
+		if (cur_iter >= 3527 && cur_iter <= 3545)
+			display_machine_operation(sol_index, 3);
 		if (alg_best_makespan > sol_vec[sol_index]->makespan)
 		{
 			//check_solution(sol_index);
@@ -1310,7 +1405,7 @@ void Solver::calculate_qr_obj(int sol_index)
 int main(int argc, char **argv)
 {
 	int rs = time(NULL);
-	rs = 1498812107;
+	//rs = 1499168911;
 	srand(rs);
 	char *argv_win[] = { "",	// 0
 		"_ifp", "instances\\DemirkolBenchmarksJobShop\\",	//"instances\\Dauzere_Data\\",
