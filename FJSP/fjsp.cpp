@@ -1938,7 +1938,7 @@ int main(int argc, char **argv)
 	solver->calculate_qr_obj1(1);
 	solver->alg_best_makespan = solver->sol_vec[1]->makespan;
 	//solver->read_solution(2, argv_map.at("_sfp") + argv_map.at("_sfn") + argv_map.at("_suffix"));
-
+	 
 	//solver->display_solution(1);
 	solver->check_solution(1);
 	//solver->determine_critical_path(1);
