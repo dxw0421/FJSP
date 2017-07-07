@@ -1710,12 +1710,12 @@ void Solver::insert_move1(int sol_index)
 			int u = crit_block[block_i][1];
 			for (int v = u + 1; v <= crit_block[block_i][2]; v++)
 			{
-				if (machine[sol_index][mach_i][v]->q >= machine[sol_index][mach_i][u]->next_job_oper->q&&	// q[v]>=q[JS[u]]
+				if (machine[sol_index][mach_i][v]->q + machine[sol_index][mach_i][v]->t>= machine[sol_index][mach_i][u]->next_job_oper->q+ machine[sol_index][mach_i][u]->next_job_oper->t&&	// q[v]>=q[JS[u]]
+					machine[sol_index][mach_i][u]->pre_job_oper!=dummy_oper[sol_index][START]&&
 					machine[sol_index][mach_i][u]->job_i != machine[sol_index][mach_i][v]->job_i)
 				{
 					// move u behind v
 					move_type = BACKWARD_INSERT;
-					mkspan = 0;
 					try_backward_insert_move1(sol_index, mkspan, mach_i, u, v);
 					if (mkspan <= min_makespan && (mkspan < alg_best_makespan || !check_tabu1(sol_index, cur_iter, mach_i, u, v, move_type)))
 					{
@@ -1742,6 +1742,7 @@ void Solver::insert_move1(int sol_index)
 					}
 				}
 				if (v!=u+1&&machine[sol_index][mach_i][u]->end_time >= machine[sol_index][mach_i][v]->pre_job_oper->end_time&&	// r[u] + t[u] >= r[JP[v]] + t[JP[v]]
+					machine[sol_index][mach_i][u]->pre_job_oper != dummy_oper[sol_index][START] &&
 					machine[sol_index][mach_i][u]->job_i != machine[sol_index][mach_i][v]->job_i)
 				{
 					// move v before u
@@ -1776,7 +1777,8 @@ void Solver::insert_move1(int sol_index)
 			int v = crit_block[block_i][2];
 			for (u = crit_block[block_i][1] + 1; u < v; u++)
 			{
-				if (machine[sol_index][mach_i][v]->q >= machine[sol_index][mach_i][u]->next_job_oper->q&&	// q[v]>=q[JS[u]]
+				if (machine[sol_index][mach_i][v]->q + machine[sol_index][mach_i][v]->t>= machine[sol_index][mach_i][u]->next_job_oper->q+ machine[sol_index][mach_i][u]->next_job_oper->t&&	// q[v]>=q[JS[u]]
+					machine[sol_index][mach_i][v]->next_job_oper!=dummy_oper[sol_index][END]&&
 					machine[sol_index][mach_i][u]->job_i != machine[sol_index][mach_i][v]->job_i)
 				{
 					// move u behind v
@@ -1865,6 +1867,7 @@ void Solver::insert_move1(int sol_index)
 				<< (min_move_type == BACKWARD_INSERT ? "b" : "f") << "\t"
 				<< min_makespan << "\t"
 				<< makespan[sol_index] << "\t" << alg_best_makespan <<"\t"
+				<<crit_block[0][0]<<"\t"
 				<< (end_time - start_time) / CLOCKS_PER_SEC
 				<< endl;
 		}
@@ -1973,7 +1976,7 @@ void Solver::perturb1(int sol_index, int cur_iter, int ptr_len)
 			int u = crit_block[block_i][1];
 			for (int v = u + 1; v <= crit_block[block_i][2]; v++)
 			{
-				if (machine[sol_index][mach_i][v]->q >= machine[sol_index][mach_i][u]->next_job_oper->q&&	// q[v]>=q[JS[u]]
+				if(machine[sol_index][mach_i][v]->q + machine[sol_index][mach_i][v]->t >= machine[sol_index][mach_i][u]->next_job_oper->q + machine[sol_index][mach_i][u]->next_job_oper->t&&	// q[v]>=q[JS[u]]
 					machine[sol_index][mach_i][u]->job_i != machine[sol_index][mach_i][v]->job_i)
 				{
 					// move u behind v
@@ -2004,7 +2007,7 @@ void Solver::perturb1(int sol_index, int cur_iter, int ptr_len)
 			int v = crit_block[block_i][2];
 			for (u = crit_block[block_i][1] + 1; u < v; u++)
 			{
-				if (machine[sol_index][mach_i][v]->q >= machine[sol_index][mach_i][u]->next_job_oper->q&&	// q[v]>=q[JS[u]]
+				if (machine[sol_index][mach_i][v]->q + machine[sol_index][mach_i][v]->t >= machine[sol_index][mach_i][u]->next_job_oper->q + machine[sol_index][mach_i][u]->next_job_oper->t&&	// q[v]>=q[JS[u]]
 					machine[sol_index][mach_i][u]->job_i != machine[sol_index][mach_i][v]->job_i)
 				{
 					// move u behind v
