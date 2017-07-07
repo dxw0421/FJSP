@@ -1846,7 +1846,7 @@ void Solver::insert_move1(int sol_index)
 			perturb1(sol_index,cur_iter,2);
 			continue;
 		}
-		//check_solution1(sol_index);
+		//check_solution1(sol_index); 
 		//bool cyc = check_cycle(sol_index);
 		update_tabu1(sol_index, cur_iter, min_mach_i, min_u, min_v);
 		apply_move(sol_index, min_mach_i, min_u, min_v, min_move_type);
