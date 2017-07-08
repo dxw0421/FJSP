@@ -964,7 +964,7 @@ void Solver::backward_insert(int sol_index, Solution::Operation *oper_u, Solutio
 	oper_u->next_mach_oper = oper_v->next_mach_oper;
 	oper_v->next_mach_oper->pre_mach_oper = oper_u;
 	oper_v->next_mach_oper = oper_u;
-	oper_u->pre_mach_oper = oper_v;	// for adding u
+	oper_u->pre_mach_oper = oper_v;	// for adding u 
 }
 void Solver::forward_insert(int sol_index, Solution::Operation *oper_u, Solution::Operation *oper_v)
 {
