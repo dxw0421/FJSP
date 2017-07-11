@@ -116,11 +116,10 @@ public:
 	Solution::Operation *job[MAXS][MAXN][MAXO];
 	Solution::Operation *machine[MAXS][MAXM][MAXO];
 	Solution::Operation *dummy_oper[MAXS][sizeof(DUMMY_OPER)];
-	Solution::Operation *last_oper_makespan_machine[MAXS][MAXM];
 	Solution::Operation *crit_path[MAXS][MAXM*MAXO];
 	Solution::Operation *queue[MAXN*MAXO];
 	int job_oper_num[MAXS][MAXN], machine_oper_num[MAXS][MAXM];
-	int makespan[MAXS], last_oper_makespan_machine_num[MAXS], crit_path_num[MAXS], queue_num;
+	int makespan[MAXS], crit_path_num[MAXS], queue_num;
 	int critical_flag[MAXN][MAXO];
 	int crit_block[MAXN*MAXM][3],globel_iteration;
 
@@ -588,13 +587,7 @@ void Solver::init_solution1(int sol_index)
 	{
 		machine[sol_index][i][machine_oper_num[sol_index][i] + 1] = dummy_oper[sol_index][END];
 		if (makespan[sol_index] < machine[sol_index][i][machine_oper_num[sol_index][i]]->end_time)
-		{
 			makespan[sol_index] = machine[sol_index][i][machine_oper_num[sol_index][i]]->end_time;
-			last_oper_makespan_machine_num[sol_index] = 0;	// begin from 1
-			last_oper_makespan_machine[sol_index][last_oper_makespan_machine_num[sol_index]++] = machine[sol_index][i][machine_oper_num[sol_index][i]];
-		}
-		else if (makespan[sol_index] == machine[sol_index][i][machine_oper_num[sol_index][i]]->end_time)
-			last_oper_makespan_machine[sol_index][last_oper_makespan_machine_num[sol_index]++] = machine[sol_index][i][machine_oper_num[sol_index][i]];
 	}
 }
 void Solver::try_backward_insert_move1(int sol_index, int &makespan, int mach_i, int u, int v)	// insert oper_u behind oper_v
@@ -697,13 +690,7 @@ void Solver::apply_move(int sol_index, int mach_i, int u, int v, MOVE_TYPE move_
 	for (int i = 1; i <= instance->m; i++)
 	{
 		if (makespan[sol_index] < machine[sol_index][i][machine_oper_num[sol_index][i]]->end_time)
-		{
 			makespan[sol_index] = machine[sol_index][i][machine_oper_num[sol_index][i]]->end_time;
-			last_oper_makespan_machine_num[sol_index] = 0;
-			last_oper_makespan_machine[sol_index][last_oper_makespan_machine_num[sol_index]++] = machine[sol_index][i][machine_oper_num[sol_index][i]];
-		}
-		else if (makespan[sol_index] == machine[sol_index][i][machine_oper_num[sol_index][i]]->end_time)
-			last_oper_makespan_machine[sol_index][last_oper_makespan_machine_num[sol_index]++] = machine[sol_index][i][machine_oper_num[sol_index][i]];
 	}
 }
 void Solver::update_tabu1(int sol_index, int cur_iter, int mach_i, int u, int v)
@@ -1160,10 +1147,6 @@ void Solver::replace_solution(int dest, int src)
 		machine_oper_num[dest][mach_i]=machine_oper_num[src][mach_i];
 	}
 	makespan[dest] = makespan[src];
-
-	for (int mach_i = 0; mach_i < last_oper_makespan_machine_num[src]; mach_i++)
-		last_oper_makespan_machine[dest][mach_i] = job[dest][last_oper_makespan_machine[src][mach_i]->job_i][last_oper_makespan_machine[src][mach_i]->oper_job_i];
-	last_oper_makespan_machine_num[dest] = last_oper_makespan_machine_num[src];
 }
 void Solver::tabu_search(int sol_index)
 {
@@ -1274,11 +1257,16 @@ void Solver::perturb1(int sol_index, int best_sol_index, int ptr_len)
 void Solver::calculate_q_crit_block(int sol_index)
 {
 	//determine critical path
-	int front = 0, rear = last_oper_makespan_machine_num[sol_index];
+	int front = 0, rear = 0;
+	for (int mach_i = 1; mach_i <= instance->m; mach_i++)
+	{
+		if (makespan[sol_index] == machine[sol_index][mach_i][machine_oper_num[sol_index][mach_i]]->end_time)
+			queue[rear++] = machine[sol_index][mach_i][machine_oper_num[sol_index][mach_i]];
+	}
 	memset(critical_flag, 0, sizeof(critical_flag));
 	while (front != rear)
 	{
-		Solution::Operation *cur_oper = last_oper_makespan_machine[sol_index][front++];
+		Solution::Operation *cur_oper = queue[front++];
 		/*cur_oper->q = MAX(cur_oper->next_job_oper->q + cur_oper->next_job_oper->t,
 			machine[sol_index][cur_oper->mach_i][cur_oper->oper_mach_i + 1]->q + machine[sol_index][cur_oper->mach_i][cur_oper->oper_mach_i + 1]->t);*/
 		if (critical_flag[cur_oper->mach_i][cur_oper->oper_mach_i] == 0)
@@ -1286,14 +1274,14 @@ void Solver::calculate_q_crit_block(int sol_index)
 			critical_flag[cur_oper->mach_i][cur_oper->oper_mach_i] = 1;
 			if (cur_oper->pre_job_oper != dummy_oper[sol_index][START] &&
 				cur_oper->start_time == cur_oper->pre_job_oper->end_time)
-				last_oper_makespan_machine[sol_index][rear++] = cur_oper->pre_job_oper;
+				queue[rear++] = cur_oper->pre_job_oper;
 			/*if (machine[sol_index][cur_oper->mach_i][cur_oper->oper_mach_i - 1] == cur_oper->pre_job_oper)
 				cout << endl;*/
 			if (machine[sol_index][cur_oper->mach_i][cur_oper->oper_mach_i - 1] != dummy_oper[sol_index][START] &&
 				cur_oper->start_time == machine[sol_index][cur_oper->mach_i][cur_oper->oper_mach_i - 1]->end_time/*&&
 				machine[sol_index][cur_oper->mach_i][cur_oper->oper_mach_i - 1] != cur_oper->pre_job_oper*/)
 				// avoid the previous machine operation is the same as the previous job operation
-				last_oper_makespan_machine[sol_index][rear++] = machine[sol_index][cur_oper->mach_i][cur_oper->oper_mach_i - 1];
+				queue[rear++] = machine[sol_index][cur_oper->mach_i][cur_oper->oper_mach_i - 1];
 		}
 
 	}
