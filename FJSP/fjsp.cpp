@@ -111,6 +111,7 @@ public:
 	vector<Solution::Operation*> critical_block_vec;
 	vector<int> critical_block_mach_pos_vec;
 	const Instance *instance;
+	int m, n;
 
 	enum DUMMY_OPER { START, END };
 	Solution::Operation *job[MAXS][MAXN][MAXO];
@@ -123,6 +124,7 @@ public:
 	int crit_block[MAXN*MAXM][3],globel_iteration;
 
 	int chromosome[MAXM][MAXN], jm[MAXN][MAXM], jt[MAXN][MAXM];
+	int number[MAXN*MAXM][3], job1[MAXN*MAXM][5], machine1[MAXM][MAXN][3], job_time[MAXN*MAXM], queue1[MAXN*MAXM];
 
 	clock_t start_time, end_time;
 	class Tabu
@@ -158,6 +160,7 @@ public:
 	void perturb1(int, int, int);
 	void replace_solution(int, int);
 	void clear_tabu_list(int);
+	void ts(int);
 };
 Instance::Instance(string _file_input) :file_input(_file_input), total_num_operation(0)
 {
@@ -254,6 +257,7 @@ void Instance::display_instance()const
 }
 Solver::Solver(const Instance &_instance, int _sol_num) :instance(&_instance), sol_num(_sol_num)
 {
+	m = instance->m, n = instance->n;
 	for (int i = 0; i <= sol_num; i++)
 	{
 		dummy_oper[i][START] = new Solution::Operation(0, 0, 0);
@@ -538,74 +542,87 @@ void Solver::init_solution(int sol_index)
 	int job_line[MAXN], machine_line[MAXM];
 	memset(job_line, 0, sizeof(job_line));
 	memset(machine_line, 0, sizeof(machine_line));
-	for (int i = 1; i <= instance->m*instance->n; i++)
+	int oper_cnt = 0;
+	for (int i = 1; i <= m*n; i++)
 	{
-		int rj = rand() % instance->n + 1;
-		while (job_line[rj] > instance->m)
-			rj = (rj + 1) % instance->n + 1;
-		if(job_line[rj]<instance->m)
+		int rj = rand() % n + 1;
+		while (job_line[rj] >= m)
+			rj = rand() % n + 1;
+		oper_cnt += 1;
+		int mach = jm[rj][++job_line[rj]];
+		chromosome[mach][++machine_line[mach]] = (rj - 1)*m + job_line[rj];
+	}
+	if (oper_cnt != m*n)
+		cout << endl;
+	memset(machine1, 0, sizeof(machine1));
+	memset(job1, 0, sizeof(job1));
+	for (int i = 1; i <= m*n; i++)
+	{
+		number[i][1] = (i - 1) / m + 1;
+		number[i][2] = (i - 1) % m + 1;
+		job_time[i] = jt[number[i][1]][number[i][2]];
+	}
+}
+void Solver::ts(int ts_iteraion)
+{
+	for (int mach_i = 1; mach_i <= m; mach_i++)
+	{
+		for (int oper_i = 1; oper_i <= n; oper_i++)
 		{
-			int mach = jm[rj][++job_line[rj]];
-			chromosome[mach][++machine_line[mach]] = (rj - 1)*instance->m + job_line[rj];
+			machine1[mach_i][oper_i][0] = chromosome[mach_i][oper_i];
+			job1[machine1[mach_i][oper_i][0]][3] = mach_i;
+			job1[machine1[mach_i][oper_i][0]][4] = oper_i;
 		}
 	}
-	vector<int> oper_to_assign_job(instance->job_vec.size(), 1);	// the operation index needed to assign at each job
-	bool is_not_finished = true;
-	while (is_not_finished)
+	int rear = 0, front = 0, flag_ts[MAXM*MAXN];
+	memset(flag_ts, 0, sizeof(flag_ts));
+	for (int mach_i = 1; mach_i <= m; mach_i++)
+		flag_ts[machine1[mach_i][1][0]] = 1;
+	for (int job_i = 1; job_i <= n; job_i++)
 	{
-		is_not_finished = false;
-		for (int job_i = 1; job_i < instance->job_vec.size(); job_i++)	// All the operations of this job is completed
+		flag_ts[(job_i - 1)*m + 1] += 1;
+		if (flag_ts[(job_i - 1)*m + 1] == 2)
+			queue1[rear++] = (job_i - 1)*m + 1;
+	}
+	int oper_cnt = 0;
+	while (rear != front)
+	{
+		int oper = queue1[front++];
+		oper_cnt += 1;
+		//int jp = number[oper][2] != 1 ? oper - 1 : 0;
+		int jp = oper - 1;
+		//int mp = job1[oper][4] - 1 > 0 ? machine1[job1[oper][3]][job1[oper][4] - 1][0] : 0;
+		int mp = machine1[job1[oper][3]][job1[oper][4] - 1][0];
+		job1[oper][1] = machine1[job1[oper][3]][job1[oper][4]][1] = MAX(job1[jp][2], job1[mp][2]);
+		job1[oper][2] = machine1[job1[oper][3]][job1[oper][4]][2] = job1[oper][1] + job_time[oper];
+		//int js = number[oper][2] != m ? oper + 1 : 0;
+		int js = oper + 1;
+		//int ms = job1[oper][4] + 1 <= n ? machine1[job1[oper][3]][job1[oper][4] + 1][0] : 0;
+		int ms = machine1[job1[oper][3]][job1[oper][4] + 1][0];
+		if (js != 0)
 		{
-			if (oper_to_assign_job[job_i] == 0)	// All the operations of this job is completed
-				continue;
-			is_not_finished = true;
-			Instance::Operation *oper = instance->job_vec[job_i]->oper_vec[oper_to_assign_job[job_i]];
-			Solution::Operation * cur_oper = job[sol_index][job_i][oper_to_assign_job[job_i]];
-			int min_ct = INT_MAX, min_ct_mach, select_proc_i, equ_cnt = 1;
-			for (int proc_i = 1; proc_i < oper->proc_vec.size(); proc_i++)	// find the best machine which has the minimum completion time
-			{
-				int oper_i = machine_oper_num[sol_index][oper->proc_vec[proc_i]->mach_i];
-				int cur_mach_ct = oper->proc_vec[proc_i]->t + MAX(machine[sol_index][oper->proc_vec[proc_i]->mach_i][oper_i]->end_time,	// the previous operation with the same machine
-					job[sol_index][job_i][oper_to_assign_job[job_i] - 1]->end_time);							// the previous operation with the same job
-				if (cur_mach_ct < min_ct)
-				{
-					min_ct = cur_mach_ct;
-					select_proc_i = proc_i;
-					min_ct_mach = oper->proc_vec[proc_i]->mach_i;
-				}
-				else if (cur_mach_ct == min_ct)
-				{
-					equ_cnt += 1;
-					if (rand() % equ_cnt)
-					{
-						select_proc_i = proc_i;
-						min_ct_mach = oper->proc_vec[proc_i]->mach_i;
-					}
-				}
-			}
-			cur_oper->proc_i = select_proc_i;
-			cur_oper->mach_i = min_ct_mach;
-			cur_oper->t = oper->proc_vec[select_proc_i]->t;
-			cur_oper->start_time = MAX(machine[sol_index][min_ct_mach][machine_oper_num[sol_index][min_ct_mach]]->end_time,
-				job[sol_index][job_i][oper_to_assign_job[job_i] - 1]->end_time);
-			cur_oper->end_time = min_ct;
-
-			machine_oper_num[sol_index][min_ct_mach] += 1;
-			cur_oper->oper_mach_i = machine_oper_num[sol_index][min_ct_mach];	// the position at the assigned machine of the operation
-			machine[sol_index][min_ct_mach][machine_oper_num[sol_index][min_ct_mach]] = cur_oper;
-
-			oper_to_assign_job[job_i] += 1;	// the next operation is to be assigned
-			if (oper_to_assign_job[job_i] >= instance->job_vec[job_i]->oper_vec.size())
-				oper_to_assign_job[job_i] = 0;	// All the operations of this job is completed
+			flag_ts[js] += 1;
+			if (flag_ts[js] == 2)
+				queue1[rear++] = js;
+		}
+		if (ms != 0)
+		{
+			flag_ts[ms] += 1;
+			if (flag_ts[ms] == 2)
+				queue1[rear++] = ms;
 		}
 	}
-	makespan[sol_index] = 0;
-	for (int i = 1; i <= instance->m; i++)
+	if (oper_cnt != m*n)
 	{
-		machine[sol_index][i][machine_oper_num[sol_index][i] + 1] = dummy_oper[sol_index][END];
-		if (makespan[sol_index] < machine[sol_index][i][machine_oper_num[sol_index][i]]->end_time)
-			makespan[sol_index] = machine[sol_index][i][machine_oper_num[sol_index][i]]->end_time;
+		cout << "ERROR: the number of operations is wrong." << endl;
+		system("pause");
 	}
+	makespan[1] = 0;
+	for (int mach_i = 1; mach_i <= m; mach_i++)
+	{
+
+	}
+
 }
 void Solver::init_solution1(int sol_index)
 {
@@ -1402,7 +1419,7 @@ void Solver::calculate_q_crit_block(int sol_index)
 int main(int argc, char **argv)
 {
 	int rs = time(NULL);
-	//rs = 1499240941;1499650432
+	rs = 1499240941;//1499650432
 	srand(rs);
 	char *argv_win[] = { "",	// 0
 		"_ifp", "instances\\DemirkolBenchmarksJobShop\\",	//"instances\\Dauzere_Data\\",
@@ -1429,7 +1446,8 @@ int main(int argc, char **argv)
 	solver->d2 = stoi(argv_map.at("_d2"));
 	solver->iteration = stoi(argv_map.at("_itr"));
 	solver->best_known_makespan = stoi(argv_map.at("_best_obj"));	// read solution
-	
+	solver->init_solution(1);
+	solver->ts(10000);
 	solver->tabu_search(1);
 #ifdef _WIN32
 	system("pause");
