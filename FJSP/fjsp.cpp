@@ -116,10 +116,9 @@ public:
 	Solution::Operation *job[MAXS][MAXN][MAXO];
 	Solution::Operation *machine[MAXS][MAXM][MAXO];
 	Solution::Operation *dummy_oper[MAXS][sizeof(DUMMY_OPER)];
-	Solution::Operation *crit_path[MAXS][MAXM*MAXO];
 	Solution::Operation *queue[MAXN*MAXO];
 	int job_oper_num[MAXS][MAXN], machine_oper_num[MAXS][MAXM];
-	int makespan[MAXS], crit_path_num[MAXS], queue_num;
+	int makespan[MAXS];
 	int critical_flag[MAXN][MAXO];
 	int crit_block[MAXN*MAXM][3],globel_iteration;
 
