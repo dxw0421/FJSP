@@ -123,8 +123,9 @@ public:
 	int critical_flag[MAXN][MAXO];
 	int crit_block[MAXN*MAXM][3],globel_iteration;
 
-	int chromosome[MAXM][MAXN], jm[MAXN][MAXM], jt[MAXN][MAXM];
-	int number[MAXN*MAXM][3], job1[MAXN*MAXM][5], machine1[MAXM][MAXN][3], job_time[MAXN*MAXM], queue1[MAXN*MAXM];
+	int chromosome[MAXM][MAXN], jm[MAXN][MAXM], jt[MAXN][MAXM], last_machine[MAXM];
+	int number[MAXN*MAXM][3], job1[MAXN*MAXM][5], machine1[MAXM][MAXN][3], job_time[MAXN*MAXM], queue1[MAXN*MAXM], blocks[MAXM*MAXN][3], q[MAXM*MAXN];
+	int best_sol = 0, cur_sol = 1;
 
 	clock_t start_time, end_time;
 	class Tabu
@@ -133,6 +134,7 @@ public:
 		int tabu_iteration;	// the tabu iteration
 		int tabu_u, tabu_oper_num;	// the number of tabu operation
 		Solution::Operation *tabu_oper[MAXO];	// the tabu block of operations from u to v
+		int tabu_operation[MAXO];
 		Tabu *front, *next;
 	};
 	Tabu *tabu_list[MAXS][MAXM];
@@ -147,17 +149,22 @@ public:
 	void init_solution(int);
 	void init_solution1(int);
 	void display_solution(int)const;
-	void check_solution1(int);
+	void check_solution(int);
+	void insert_move(int, int);
 	void insert_move1(int,int);
 	void tabu_search(int);
-	void try_backward_insert_move1(int, int&, int, int, int);
-	void try_forward_insert_move1(int, int&, int, int, int);
+	void try_backward_insert_move(int, int&, int, int, int);
+	void try_forward_insert_move(int, int&, int, int, int);
 	void apply_move(int, int, int, int, MOVE_TYPE);
-	void update_tabu1(int, int, int, int, int);
-	bool check_tabu1(int, int, int, int, int, MOVE_TYPE);
+	void update_tabu(int, int, int, int);
+	void update_tabu1(int, int, int, int);
+	bool check_tabu(int, int, int, int, MOVE_TYPE);
+	bool check_tabu1(int, int, int, int, int);
 	bool check_cycle(int);
 	void calculate_q_crit_block(int);
-	void perturb1(int, int, int);
+	void calculate_q_crit_block1(int);
+	void calculate_r(int);
+	void perturb(int, int, int);
 	void replace_solution(int, int);
 	void clear_tabu_list(int);
 	void ts(int);
@@ -298,16 +305,18 @@ void Solver::read_solution(int sol_index, string file_input)
 	{
 		for (int oper_i = 1; oper_i <= instance->job_vec[job_i]->num_oper; oper_i++)
 		{
-			//sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_i]->proc_i = 1;	// only one machine to process the operation
-			//sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_i]->mach_i = instance->job_vec[job_i]->oper_vec[oper_i]->proc_vec[1]->mach_i;
-			//sol_vec[sol_index]->job_vec[job_i]->oper_vec[oper_i]->t = instance->job_vec[job_i]->oper_vec[oper_i]->proc_vec[1]->t;
+			cout << job[sol_index][job_i][oper_i]->job_i << ", "
+				<<job[sol_index][job_i][oper_i]->oper_job_i<<" ";
+			job[sol_index][job_i][oper_i]->mach_i = instance->job_vec[job_i]->oper_vec[oper_i]->proc_vec[1]->mach_i;
+			job[sol_index][job_i][oper_i]->t = instance->job_vec[job_i]->oper_vec[oper_i]->proc_vec[1]->t;
 		}
+		cout << endl;
 	}
 	string str_line;
 	vector<string>fields_vec;
 	getline(ifs, str_line);
 	best_known_makespan = stoi(str_line);
-	int mach_i = 0, makespan = 0;
+	int mach_i = 0;
 	while (getline(ifs, str_line))
 	{
 		cout << str_line << endl;
@@ -316,26 +325,21 @@ void Solver::read_solution(int sol_index, string file_input)
 		for (int i = 0; i < fields_vec.size(); i++)
 		{
 			int job_i = stoi(fields_vec[i]) + 1;
-			/*Solution::Operation *oper = sol_vec[sol_index]->job_vec[job_i]->oper_vec[1];
+			Solution::Operation *oper = job[sol_index][job_i][1];
 			while (oper->mach_i != mach_i)
 				oper = oper->next_job_oper;
-			oper->pre_mach_oper = sol_vec[sol_index]->tail_oper_mach_vec[mach_i];
-			if (sol_vec[sol_index]->head_oper_mach_vec[mach_i] == NULL)
-				sol_vec[sol_index]->head_oper_mach_vec[mach_i] = oper;
-			else
-				oper->pre_mach_oper->next_mach_oper = oper;
-			sol_vec[sol_index]->tail_oper_mach_vec[mach_i] = oper;	*/		
+			machine[sol_index][mach_i][i + 1] = oper;	
+			oper->oper_mach_i = i + 1;
 		}
-		//sol_vec[sol_index]->tail_oper_mach_vec[mach_i]->next_mach_oper = sol_vec[sol_index]->end_dummy_oper;
-		/*if (sol_vec[sol_index]->tail_oper_mach_vec[mach_i]->end_time > makespan)
-		makespan = sol_vec[sol_index]->tail_oper_mach_vec[mach_i]->end_time;*/
+		machine[sol_index][mach_i][fields_vec.size() + 1] = dummy_oper[sol_index][END];
+		machine_oper_num[sol_index][mach_i] = fields_vec.size();
 	}
-	//calculate_qr_obj(sol_index);
-	/*if (best_known_makespan != sol_vec[sol_index]->makespan)
+	calculate_r(sol_index);
+	if (best_known_makespan != makespan[sol_index])
 	{
 		cout << "ERROR: the solution given by the author is wrong." << endl;
 		system("pause");
-	}*/
+	}
 	ifs.close();
 }
 void Solver::display_solution(int sol_index)const
@@ -368,7 +372,64 @@ void Solver::display_machine_operation(int sol_index, int mach_index)const
 		<< machine[sol_index][mach_index][oper_i]->start_time << "\t" << machine[sol_index][mach_index][oper_i]->end_time << "\t";
 	cout << endl;
 }
-void Solver::check_solution1(int sol_index)
+void Solver::calculate_r(int sol_index)
+{
+	stack<Solution::Operation*> top_oper_stack;
+	memset(critical_flag, 0, sizeof(critical_flag));
+	int oper_num = 0;	// optimize by removing queue_num
+	int front = 0, rear = 0;
+	for (int mach_i = 1; mach_i <= instance->m; mach_i++)
+	{
+		if (machine[sol_index][mach_i][1]->oper_job_i == 1)	// alternative
+		{
+			queue[rear++] = machine[sol_index][mach_i][1];
+			critical_flag[mach_i][1] = 0;
+		}
+		else
+			critical_flag[mach_i][1] = 1;
+		for (int oper_i = 2; oper_i <= machine_oper_num[sol_index][mach_i]; oper_i++)
+		{
+			if (machine[sol_index][mach_i][oper_i]->oper_job_i == 1)
+				critical_flag[mach_i][oper_i] = 1;
+			else
+				critical_flag[mach_i][oper_i] = 2;
+		}
+		oper_num += machine_oper_num[sol_index][mach_i];
+	}
+	if (oper_num != instance->m*instance->n)
+	{
+		cout << "ERROR: the number of operations is wrong" << endl;
+		system("pause");
+	}
+	oper_num = 0;
+	while (front != rear)
+	{
+		Solution::Operation *oper = queue[front++];
+		oper->start_time = MAX(oper->pre_job_oper->end_time, machine[sol_index][oper->mach_i][oper->oper_mach_i - 1]->end_time);
+		oper->end_time = oper->start_time + oper->t;
+		top_oper_stack.push(oper);
+		oper_num += 1;
+		critical_flag[oper->next_job_oper->mach_i][oper->next_job_oper->oper_mach_i] -= 1;
+		critical_flag[oper->mach_i][oper->oper_mach_i + 1] -= 1;
+		if (critical_flag[oper->next_job_oper->mach_i][oper->next_job_oper->oper_mach_i] == 0)
+			queue[rear++] = oper->next_job_oper;
+		if (critical_flag[oper->mach_i][oper->oper_mach_i + 1] == 0 &&
+			machine[sol_index][oper->mach_i][oper->oper_mach_i + 1] != oper->next_job_oper)
+			queue[rear++] = machine[sol_index][oper->mach_i][oper->oper_mach_i + 1];
+	}
+	if (oper_num != instance->m*instance->n)
+	{
+		cout << "ERROR: the number of operations is wrong" << endl;
+		system("pause");
+	}
+	makespan[sol_index] = 0;
+	for (int mach_i = 1; mach_i <= m; mach_i++)
+	{
+		if (makespan[sol_index] < machine[sol_index][mach_i][machine_oper_num[sol_index][mach_i]]->end_time)
+			makespan[sol_index] = machine[sol_index][mach_i][machine_oper_num[sol_index][mach_i]]->end_time;
+	}
+}
+void Solver::check_solution(int sol_index)
 {
 	cout << "***check solution " << sol_index << " *** " << makespan[sol_index] << endl;
 	stack<Solution::Operation*> top_oper_stack;
@@ -537,7 +598,7 @@ bool Solver::check_cycle(int sol_index)
 	}
 	return false;
 }
-void Solver::init_solution(int sol_index)
+void Solver::init_solution1(int sol_index)
 {
 	int job_line[MAXN], machine_line[MAXM];
 	memset(job_line, 0, sizeof(job_line));
@@ -617,14 +678,28 @@ void Solver::ts(int ts_iteraion)
 		cout << "ERROR: the number of operations is wrong." << endl;
 		system("pause");
 	}
-	makespan[1] = 0;
+	last_machine[0] = 0;
+	makespan[cur_sol] = 0;
 	for (int mach_i = 1; mach_i <= m; mach_i++)
+	{
+		if (makespan[cur_sol] < machine1[mach_i][n][2])
+		{
+			makespan[cur_sol] = machine1[mach_i][n][2];
+			last_machine[0] = 0;
+			last_machine[++last_machine[0]] = machine1[mach_i][n][0];
+		}
+		else if (makespan[cur_sol] == machine1[mach_i][n][2])
+			last_machine[++last_machine[0]] = machine1[mach_i][n][0];
+	}
+	makespan[best_sol] = makespan[cur_sol];
+	clear_tabu_list(cur_sol);
+	int local_iter = ts_iteraion;
+	while (local_iter--)
 	{
 
 	}
-
 }
-void Solver::init_solution1(int sol_index)
+void Solver::init_solution(int sol_index)
 {
 	vector<int> oper_to_assign_job(instance->job_vec.size(), 1);	// the operation index needed to assign at each job
 	bool is_not_finished = true;
@@ -684,7 +759,7 @@ void Solver::init_solution1(int sol_index)
 			makespan[sol_index] = machine[sol_index][i][machine_oper_num[sol_index][i]]->end_time;
 	}
 }
-void Solver::try_backward_insert_move1(int sol_index, int &makespan, int mach_i, int u, int v)	// insert oper_u behind oper_v
+void Solver::try_backward_insert_move(int sol_index, int &makespan, int mach_i, int u, int v)	// insert oper_u behind oper_v
 {
 	machine[sol_index][mach_i][u + 1]->apx_r = MAX(machine[sol_index][mach_i][u + 1]->pre_job_oper->end_time, machine[sol_index][mach_i][u - 1]->end_time);
 	for (int oper_i = u + 2; oper_i <= v; oper_i++)
@@ -699,7 +774,7 @@ void Solver::try_backward_insert_move1(int sol_index, int &makespan, int mach_i,
 		if (makespan < machine[sol_index][mach_i][oper_i]->apx_r + machine[sol_index][mach_i][oper_i]->apx_q)
 			makespan = machine[sol_index][mach_i][oper_i]->apx_r + machine[sol_index][mach_i][oper_i]->apx_q;
 }
-void Solver::try_forward_insert_move1(int sol_index, int &makespan, int mach_i, int u, int v)	// insert oper_v before oper_u
+void Solver::try_forward_insert_move(int sol_index, int &makespan, int mach_i, int u, int v)	// insert oper_v before oper_u
 {
 	machine[sol_index][mach_i][v]->apx_r = MAX(machine[sol_index][mach_i][v]->pre_job_oper->end_time, machine[sol_index][mach_i][u - 1]->end_time);
 	machine[sol_index][mach_i][u]->apx_r = MAX(machine[sol_index][mach_i][u]->pre_job_oper->end_time, machine[sol_index][mach_i][v]->apx_r + machine[sol_index][mach_i][v]->t);
@@ -782,11 +857,11 @@ void Solver::apply_move(int sol_index, int mach_i, int u, int v, MOVE_TYPE move_
 			makespan[sol_index] = machine[sol_index][i][machine_oper_num[sol_index][i]]->end_time;
 	}
 }
-void Solver::update_tabu1(int sol_index, int cur_iter, int mach_i, int u, int v)
+void Solver::update_tabu(int sol_index, int mach_i, int u, int v)
 {
 	Tabu *tabu = new Tabu();
 	int r1 = MAX((makespan[sol_index] - best_known_makespan) / d1, d2);	// optimize by making it global
-	tabu->tabu_iteration = cur_iter + tt0 + rand() / r1;
+	tabu->tabu_iteration = globel_iteration + tt0 + rand() / r1;
 	tabu->tabu_u = u;
 	tabu->tabu_oper_num = v - u + 1;
 	for (int i = 1; i <= tabu->tabu_oper_num; i++)
@@ -796,15 +871,29 @@ void Solver::update_tabu1(int sol_index, int cur_iter, int mach_i, int u, int v)
 	tabu_list[sol_index][mach_i] = tabu;
 	if (tabu->next != NULL)
 		tabu->next->front = tabu;
+}void Solver::update_tabu1(int sol_index, int mach_i, int u, int v)
+{
+	Tabu *tabu = new Tabu();
+	int r1 = MAX((makespan[sol_index] - best_known_makespan) / d1, d2);	// optimize by making it global
+	tabu->tabu_iteration = globel_iteration + tt0 + rand() / r1;
+	tabu->tabu_u = u;
+	tabu->tabu_oper_num = v - u + 1;
+	for (int i = 1; i <= tabu->tabu_oper_num; i++)
+		tabu->tabu_operation[i] = machine1[mach_i][u + i - 1][0];
+	tabu->front = NULL;
+	tabu->next = tabu_list[sol_index][mach_i];
+	tabu_list[sol_index][mach_i] = tabu;
+	if (tabu->next != NULL)
+		tabu->next->front = tabu;
 }
-bool Solver::check_tabu1(int sol_index, int cur_iter, int mach_i, int u, int v, MOVE_TYPE move_type)// if u and v in tabu, return true, else return false
+bool Solver::check_tabu(int sol_index, int mach_i, int u, int v, MOVE_TYPE move_type)// if u and v in tabu, return true, else return false
 {
 	/*if (cur_iter == 151 && oper_u_pos==4&&oper_v_pos==5)
 	cout << endl;*/
 	int r1 = MAX((makespan[sol_index] - best_known_makespan) / d1, d2);
 	for (Tabu *tabu = tabu_list[sol_index][mach_i]; tabu != NULL; tabu = tabu->next)
 	{
-		if (tabu->tabu_iteration <= cur_iter - r1) // not in tabu status
+		if (tabu->tabu_iteration <= globel_iteration - r1) // not in tabu status
 		{
 			if (tabu == tabu_list[sol_index][mach_i])	// tabu is the first node
 				tabu_list[sol_index][mach_i] = NULL;
@@ -822,7 +911,7 @@ bool Solver::check_tabu1(int sol_index, int cur_iter, int mach_i, int u, int v, 
 			tabu = NULL;
 			break;
 		}
-		else if (tabu->tabu_iteration < cur_iter)
+		else if (tabu->tabu_iteration < globel_iteration)
 			continue;
 		int tabu_v = tabu->tabu_u + tabu->tabu_oper_num - 1;
 		if (u > tabu_v || v < tabu->tabu_u)
@@ -875,6 +964,82 @@ bool Solver::check_tabu1(int sol_index, int cur_iter, int mach_i, int u, int v, 
 	}
 	return false;
 }
+bool Solver::check_tabu1(int sol_index, int mach_i, int u, int v, int is_forward)// if u and v in tabu, return true, else return false
+{
+	int r1 = MAX((makespan[sol_index] - best_known_makespan) / d1, d2);
+	for (Tabu *tabu = tabu_list[sol_index][mach_i]; tabu != NULL; tabu = tabu->next)
+	{
+		if (tabu->tabu_iteration <= globel_iteration - r1) // not in tabu status
+		{
+			if (tabu == tabu_list[sol_index][mach_i])	// tabu is the first node
+				tabu_list[sol_index][mach_i] = NULL;
+			else
+				tabu->front->next = NULL;
+			Tabu *tabu1 = tabu->next;	// optimize here
+			while (tabu1 != NULL)
+			{
+				delete tabu;
+				tabu = tabu1;
+				tabu1 = tabu1->next;
+			}
+			if (tabu != NULL)
+				delete tabu;
+			tabu = NULL;
+			break;
+		}
+		else if (tabu->tabu_iteration < globel_iteration)
+			continue;
+		int tabu_v = tabu->tabu_u + tabu->tabu_oper_num - 1;
+		if (u > tabu_v || v < tabu->tabu_u)
+			continue;
+		bool is_same = true;
+		if (is_forward == 0)
+		{
+			for (int i = 1; i <= tabu->tabu_oper_num; i++)
+			{
+				int tabu_u = tabu->tabu_u + i - 1;
+				int oper;
+				if (tabu_u < u)
+					oper = machine1[mach_i][tabu_u][0];
+				else if (tabu_u >= u&&tabu_u < v)
+					oper = machine1[mach_i][tabu_u + 1][0];
+				else if (tabu_u == v)
+					oper = machine1[mach_i][u][0];
+				else  // if (tabu_u > v)
+					oper = machine1[mach_i][tabu_u][0];
+				if (oper != tabu->tabu_operation[i])
+				{
+					is_same = false;
+					break;
+				}
+			}
+		}
+		else  // if(move_type==FORWARD_INSERT)
+		{
+			for (int i = 1; i <= tabu->tabu_oper_num; i++)
+			{
+				int tabu_u = tabu->tabu_u + i - 1;
+				int oper;
+				if (tabu_u < u)
+					oper = machine1[mach_i][tabu_u][0];
+				else if (tabu_u == u)
+					oper = machine1[mach_i][v][0];
+				else if (tabu_u > u&&tabu_u <= v)
+					oper = machine1[mach_i][tabu_u - 1][0];
+				else  // if (tabu_u > v)
+					oper = machine1[mach_i][tabu_u][0];
+				if (oper != tabu->tabu_operation[i])
+				{
+					is_same = false;
+					break;
+				}
+			}
+		}
+		if (is_same)
+			return is_same;
+	}
+	return false;
+}
 void Solver::clear_tabu_list(int sol_index)
 {
 	Tabu *tabu1, *tabu2;
@@ -897,7 +1062,7 @@ void Solver::clear_tabu_list(int sol_index)
 		}
 	}
 }
-void Solver::insert_move1(int sol_index,int best_sol_index)
+void Solver::insert_move(int sol_index, int best_sol_index)
 {
 	cout << "insert move, solution " << sol_index << ", " << makespan[sol_index] << endl;
 	int min_u, min_v, min_mach_i, mkspan, min_makespan, equ_cnt;
@@ -908,11 +1073,11 @@ void Solver::insert_move1(int sol_index,int best_sol_index)
 	{
 		globel_iteration += 1;
 		min_makespan = min_tb_makespan = INT_MAX;
-		/*if (cur_iter == 3527)
+		if (globel_iteration == 1)
 		{
-		cout << endl;
-		display_machine_operation(sol_index, 3);
-		}*/
+			for (int block_i = 1; block_i <= crit_block[0][0]; block_i++)
+				cout << crit_block[block_i][0] << " " << crit_block[block_i][1] << " " << crit_block[block_i][2] << endl;
+		}
 		for (int block_i = 1; block_i <= crit_block[0][0]; block_i++)
 		{
 			int mach_i = crit_block[block_i][0];
@@ -920,14 +1085,20 @@ void Solver::insert_move1(int sol_index,int best_sol_index)
 			for (int v = u + 1; v <= crit_block[block_i][2]; v++)
 			{
 				if (machine[sol_index][mach_i][v]->q >= machine[sol_index][mach_i][u]->next_job_oper->q &&	// q[v]>=q[JS[u]]
-					machine[sol_index][mach_i][u]->pre_job_oper != dummy_oper[sol_index][START] )
+					machine[sol_index][mach_i][u]->pre_job_oper != dummy_oper[sol_index][START])
 				{
 					// move u behind v
 					move_type = BACKWARD_INSERT;
-					try_backward_insert_move1(sol_index, mkspan, mach_i, u, v);
-					/*if (mkspan < alg_best_makespan&&mkspan == min_makespan)
-						cout << endl;*/
-					bool is_tabu = check_tabu1(sol_index, globel_iteration, mach_i, u, v, move_type);
+					try_backward_insert_move(sol_index, mkspan, mach_i, u, v);
+					if (globel_iteration == 1)
+					{
+						cout << mach_i << " "
+							<< u << " " << v << " "
+							<< (move_type == BACKWARD_INSERT ? "b" : "f") << "\t"
+							<< mkspan 
+							<< endl;
+					}
+					bool is_tabu = check_tabu(sol_index, mach_i, u, v, move_type);
 					if (mkspan <= min_makespan && !is_tabu)
 					{
 						if (mkspan < min_makespan)
@@ -986,8 +1157,16 @@ void Solver::insert_move1(int sol_index,int best_sol_index)
 				{
 					// move v before u
 					move_type = FORWARD_INSERT;
-					try_forward_insert_move1(sol_index, mkspan, mach_i, u, v);
-					bool is_tabu = check_tabu1(sol_index, globel_iteration, mach_i, u, v, move_type);
+					try_forward_insert_move(sol_index, mkspan, mach_i, u, v);
+					if (globel_iteration == 1)
+					{
+						cout << mach_i << " "
+							<< u << " " << v << " "
+							<< (move_type == BACKWARD_INSERT ? "b" : "f") << "\t"
+							<< mkspan
+							<< endl;
+					}
+					bool is_tabu = check_tabu(sol_index, mach_i, u, v, move_type);
 					if (mkspan <= min_makespan && !is_tabu)
 					{
 						if (mkspan < min_makespan)
@@ -1051,8 +1230,16 @@ void Solver::insert_move1(int sol_index,int best_sol_index)
 				{
 					// move u behind v
 					move_type = BACKWARD_INSERT;
-					try_backward_insert_move1(sol_index, mkspan, mach_i, u, v);
-					bool is_tabu = check_tabu1(sol_index, globel_iteration, mach_i, u, v, move_type);
+					try_backward_insert_move(sol_index, mkspan, mach_i, u, v);
+					if (globel_iteration == 1)
+					{
+						cout << mach_i << " "
+							<< u << " " << v << " "
+							<< (move_type == BACKWARD_INSERT ? "b" : "f") << "\t"
+							<< mkspan
+							<< endl;
+					}
+					bool is_tabu = check_tabu(sol_index, mach_i, u, v, move_type);
 					if (mkspan <= min_makespan && !is_tabu)
 					{
 						if (mkspan < min_makespan)
@@ -1111,8 +1298,16 @@ void Solver::insert_move1(int sol_index,int best_sol_index)
 				{
 					// move v before u
 					move_type = FORWARD_INSERT;
-					try_forward_insert_move1(sol_index, mkspan, mach_i, u, v);
-					bool is_tabu = check_tabu1(sol_index, globel_iteration, mach_i, u, v, move_type);
+					try_forward_insert_move(sol_index, mkspan, mach_i, u, v);
+					if (globel_iteration == 1)
+					{
+						cout << mach_i << " "
+							<< u << " " << v << " "
+							<< (move_type == BACKWARD_INSERT ? "b" : "f") << " *\t"
+							<< mkspan
+							<< endl;
+					}
+					bool is_tabu = check_tabu(sol_index, mach_i, u, v, move_type);
 					if (mkspan <= min_makespan && !is_tabu)
 					{
 						if (mkspan < min_makespan)
@@ -1171,12 +1366,12 @@ void Solver::insert_move1(int sol_index,int best_sol_index)
 		}
 		if (min_makespan == INT_MAX)
 		{
-			perturb1(sol_index, best_sol_index, 2);
+			perturb(sol_index, best_sol_index, 2);
 			continue;
 		}
 		//check_solution1(sol_index); 
 		//bool cyc = check_cycle(sol_index);
-		update_tabu1(sol_index, globel_iteration, min_mach_i, min_u, min_v);
+		update_tabu(sol_index, min_mach_i, min_u, min_v);
 		apply_move(sol_index, min_mach_i, min_u, min_v, min_move_type);
 		calculate_q_crit_block(sol_index);
 		//cyc = check_cycle(sol_index);
@@ -1186,7 +1381,7 @@ void Solver::insert_move1(int sol_index,int best_sol_index)
 		if (makespan[best_sol_index] > makespan[sol_index])
 		{
 			end_time = clock();
-			check_solution1(sol_index);
+			check_solution(sol_index);
 			replace_solution(best_sol_index, sol_index);
 			alg_best_iter = globel_iteration;
 			local_iter = 1;
@@ -1200,14 +1395,213 @@ void Solver::insert_move1(int sol_index,int best_sol_index)
 				<< (end_time - start_time) / CLOCKS_PER_SEC
 				<< endl;
 		}
-		/*if (makespan[best_sol_index] <= 3367)
-			cout << globel_iteration << "\t" << local_iter << "\t" << min_mach_i << "\t"
-			<< min_u << "\t" << min_v << "\t"
-			<< (min_move_type == BACKWARD_INSERT ? "b" : "f") << "\t"
-			<< min_makespan << "\t" << min_tb_makespan << "\t"
-			<< makespan[sol_index] << "\t" << makespan[best_sol_index] << "\t"
-			<< crit_block[0][0] << "\t"
-			<< endl;*/
+		if (makespan[best_sol_index] <= 3348)
+		//if (globel_iteration==1)
+		cout << globel_iteration << "\t" << local_iter << "\t" << min_mach_i << "\t"
+		<< min_u << "\t" << min_v << "\t"
+		<< (min_move_type == BACKWARD_INSERT ? "b" : "f") << "\t"
+		<< min_makespan << "\t" << min_tb_makespan << "\t"
+		<< makespan[sol_index] << "\t" << makespan[best_sol_index] << "\t"
+		<< crit_block[0][0] << "\t"
+		<< endl;
+	}
+}
+void Solver::insert_move1(int sol_index, int best_sol_index)
+{
+	int first_oper, last_oper, u, v, w, block_length, mach_i;
+	int min_makespan = INT_MAX, min_u, min_v, min_forward, equ_cnt;
+	int r_change[MAXN], q_change[MAXN];
+	calculate_q_crit_block1(sol_index);
+	for (int block_i = 1; block_i <= blocks[0][0]; block_i++)
+	{
+		first_oper = blocks[block_i][1];
+		last_oper = blocks[block_i][2];
+		block_length = last_oper - first_oper + 1;
+		if (block_length == 1)
+			continue;
+		mach_i = blocks[block_i][0];
+		u = machine1[mach_i][first_oper][0];
+		int js_u = number[u][2] < m ? u + 1 : 0;
+		int jp_u = number[u][2] != 1 ? u - 1 : 0;
+		int mp_u = job1[u][4] != 1 ? machine1[mach_i][job1[u][4] - 1][0] : 0;	// test if job1[u][4]==first_oper
+		for (int i = 2; i <= block_length; i++)
+		{
+			v = machine1[mach_i][first_oper + i - 1][0];
+			int ms_v = job1[v][4] != n ? machine1[mach_i][job1[v][4] - 1][0] : 0;
+			int js_v = number[v][2] < m ? v + 1 : 0;
+			int jp_v = number[v][2] > 1 ? v - 1 : 0;
+			if (q[v] >= q[js_u]&&jp_u!=0)	// move u behind v
+			{
+				for (int j = 2; j <= i + 1; j++)
+				{
+					w = machine1[mach_i][first_oper + j - 1][0];
+					int jp_w = number[w][2] != 1 ? w - 1 : 0;
+					int mp_w = job1[w][4] != 1 ? machine1[mach_i][job1[w][4] - 1][0] : 0;
+					if (j == 2 && mp_u == 0)
+						r_change[j] = job1[jp_w][2];
+					else if (j == 2)
+						r_change[j] = MAX(job1[jp_w][2], job1[mp_u][2]);
+					else if (j == i + 1)
+						r_change[j] = MAX(job1[jp_u][2], r_change[j - 1] + job_time[v]);
+					else
+						r_change[j] = MAX(job1[jp_w][2], r_change[j - 1] + job_time[mp_w]);
+				}
+				for (int j = i + 1; j >= 2; j--)
+				{
+					w = machine1[mach_i][first_oper + j - 1][0];
+					int js_w = number[w][2] < m ? w + 1 : 0;
+					if (j == i + 1 && ms_v == 0)	// for u
+						q_change[j] = job_time[u] + q[js_u];
+					else if (j == i + 1)	// for u
+						q_change[j] = job_time[u] + MAX(q[js_u], q[ms_v]);
+					else if (j == i)	// for v
+						q_change[j] = job_time[v] + MAX(q[js_v], q_change[j + 1]);
+					else // for w
+						q_change[j] = job_time[w] + MAX(q[js_w], q_change[j + 1]);
+				}
+				int temp_makespan = 0;
+				for (int j = 2; j <= i + 1; j++)
+				{
+					if (temp_makespan < r_change[j] + q_change[j])
+						temp_makespan = r_change[j] + q_change[j];
+				}
+				if (temp_makespan <= min_makespan&&check_tabu1(sol_index, mach_i, u, v, 0) == 0)
+				{
+					if (temp_makespan < min_makespan)
+					{
+						min_makespan = temp_makespan;
+						min_u = u;
+						min_v = v;
+						min_forward = 0;
+						equ_cnt = 1;
+					}
+					else if (temp_makespan == min_makespan)
+					{
+						equ_cnt += 1;
+						if (rand() % equ_cnt == 0)
+						{
+							min_u = u;
+							min_v = v;
+							min_forward = 0;
+						}
+					}
+				}
+				else if (temp_makespan < min_makespan&&temp_makespan < makespan[best_sol])
+				{
+					min_makespan = temp_makespan;
+					min_u = u;
+					min_v = v;
+					min_forward = 0;
+					equ_cnt = 1;
+				}
+			}
+
+			if (job1[u][2] >= job1[jp_v][2] && jp_u != 0)	// move v before u
+			{
+				for (int j = 0; j <= i - 1; j++)
+				{
+					int w = machine1[mach_i][first_oper + j - 1][0];
+					int mp_w = job1[w][4] > 1 ? machine1[job1[w][3]][job1[w][4] - 1][0] : 0;
+					if (j == 0 && mp_u == 0)	// v
+						r_change[j] = job1[jp_v][2];
+					else if (j == 0)	// v
+						r_change[j] = MAX(job1[jp_v][2], job1[mp_u][2]);
+					else if (j == 1)	// u
+						r_change[j] = MAX(job1[jp_u][2], r_change[j - 1] + job_time[v]);
+					else
+						r_change[j] = MAX(job1[w][2], r_change[j - 1] + job_time[mp_w]);
+				}
+				for (int j = i - 1; j >= 0; j--)
+				{
+					int w = machine1[mach_i][first_oper + j - 1][0];
+					int js_w = number[w][2] < m ? w + 1 : 0;
+					if (j == i - 1 && ms_v == 0)
+						q_change[j] = job_time[w] + q[js_w];
+					else if (j == i - 1)
+						q_change[j] = job_time[w] + MAX(q[js_w], q[ms_v]);
+					else if (j == 0)	// v
+						q_change[j] = job_time[v] + MAX(q[js_v], q_change[j + 1]);
+					else
+						q_change[j] = job_time[w] + MAX(q[js_w], q_change[j + 1]);
+				}
+				int temp_makespan = 0;
+				for (int j = 0; j <= i - 1; j++)
+				{
+					if (temp_makespan < r_change[j] + q_change[j])
+						temp_makespan = r_change[j] + q_change[j];
+				}
+				if (temp_makespan <= min_makespan&&check_tabu1(sol_index, mach_i, u, v, 1) == 0)
+				{
+					if (temp_makespan < min_makespan)
+					{
+						min_makespan = temp_makespan;
+						min_u = u;
+						min_v = v;
+						min_forward = 1;
+						equ_cnt = 1;
+					}
+					else if (temp_makespan == min_makespan)
+					{
+						equ_cnt += 1;
+						if (rand() % equ_cnt == 0)
+						{
+							min_u = u;
+							min_v = v;
+							min_forward = 1;
+						}
+					}
+				}
+				else if (temp_makespan < min_makespan&&temp_makespan < makespan[best_sol])
+				{
+					min_makespan = temp_makespan;
+					min_u = u;
+					min_v = v;
+					min_forward = 1;
+					equ_cnt = 1;
+				}
+			}
+		}
+
+		v = machine1[mach_i][last_oper][0];	// v remains unchange
+		int js_v = number[v][2] < m ? v + 1 : 0;
+		int ms_v = job1[v][4] < n ? machine1[job1[v][3]][job1[v][4] + 1][0] : 0;
+		for (int i = 1; i <= block_length - 1; i++)
+		{
+			u = machine1[mach_i][first_oper + i - 1][0];
+			mp_u = job1[u][4] > 1 ? machine1[job1[u][3]][job1[u][4] - 1][0] : 0;
+			js_u = number[u][2] < m ? u + 1 : 0;
+			jp_u = number[u][2] > 1 ? u - 1 : 0;
+			if (q[v] >= q[js_u] && js_v != 0)
+			{
+				for (int j = i + 1; j <= block_length + 1; j++)
+				{
+					w = machine1[mach_i][first_oper + j - 1][0];
+					int jp_w = number[w][2] > 1 ? w - 1 : 0;
+					int mp_w = job1[w][4] > 1 ? machine1[job1[w][3]][job1[w][4] - 1][0] : 0;
+					if (j == i + 1 && mp_u == 0)
+						r_change[j] = job1[jp_w][2];
+					else if (j == i + 1)
+						r_change[j] = MAX(job1[jp_w][2], job1[mp_u][2]);
+					else if (j == block_length + 1)
+						r_change[j] = MAX(job1[jp_u][2], r_change[j - 1] + job_time[v]);
+					else
+						r_change[j] = MAX(job1[jp_w][2], r_change[j - 1] + job_time[mp_w]);
+				}
+				for (int j = block_length + 1; j >= i + 1; j++)
+				{
+					w = machine1[mach_i][first_oper + j - 1][0];
+					int js_w = number[w][2] < m ? u + 1 : 0;
+					if (j == block_length + 1 && ms_v == 0)
+						q_change[j] = job_time[u] + q[js_u];
+					else if (j == block_length + 1)
+						q_change[j] = job_time[u] + MAX(q[js_u], q[ms_v]);
+					else if (j == block_length)
+						q_change[j] = job_time[v] + MAX(q[js_v], q_change[j + 1]);
+					else
+						q_change[j] = job_time[w] + MAX(q[js_w], q_change[j + 1]);
+				}
+			}
+		}
 	}
 }
 void Solver::replace_solution(int dest, int src)
@@ -1236,24 +1630,27 @@ void Solver::replace_solution(int dest, int src)
 }
 void Solver::tabu_search(int sol_index)
 {
-	int best_sol = 0, cur_sol = 1;
-	init_solution1(best_sol);
-	calculate_q_crit_block(best_sol);
+	int best_sol = 2, cur_sol = 3;
+	//init_solution(best_sol);
+	//calculate_q_crit_block(best_sol);
+	calculate_q_crit_block(sol_index);
+	replace_solution(best_sol, sol_index);
+	insert_move(sol_index, best_sol);
 	globel_iteration = 0;
 	
-	check_solution1(best_sol);
+	check_solution(best_sol);
 
 	start_time = clock();
 	for (int cur_iter = 1; cur_iter <= 200; cur_iter++)
 	{
 		replace_solution(cur_sol, best_sol);
 		calculate_q_crit_block(cur_sol);
-		insert_move1(cur_sol, best_sol);
+		insert_move(cur_sol, best_sol);
 		clear_tabu_list(cur_sol);
 		cout << cur_iter << " **********************************" << endl;
 	}
 }
-void Solver::perturb1(int sol_index, int best_sol_index, int ptr_len)
+void Solver::perturb(int sol_index, int best_sol_index, int ptr_len)
 {
 	int  equ_cnt, min_u, min_v, min_mach_i;
 	MOVE_TYPE min_move_type;
@@ -1344,6 +1741,7 @@ void Solver::calculate_q_crit_block(int sol_index)
 {
 	//determine critical path
 	int front = 0, rear = 0;
+
 	for (int mach_i = 1; mach_i <= instance->m; mach_i++)
 	{
 		if (makespan[sol_index] == machine[sol_index][mach_i][machine_oper_num[sol_index][mach_i]]->end_time)
@@ -1416,16 +1814,88 @@ void Solver::calculate_q_crit_block(int sol_index)
 		}
 	}
 }
+// determine critical path, and calculate q for all operations
+void Solver::calculate_q_crit_block1(int sol_index)
+{
+	int front = 0, rear = 0;
+	memset(critical_flag, 0, sizeof(critical_flag));
+	for (int i = 1; i <= last_machine[0]; i++)
+		queue1[rear++] = last_machine[i];
+	while (front != rear)
+	{
+		int oper = queue1[front++];
+		int mp = machine1[job1[oper][3]][job1[oper][4]-1][0];
+		int jp = oper - 1;
+		if (critical_flag[job1[oper][3]][job1[oper][4]] == 0)
+		{
+			critical_flag[job1[oper][3]][job1[oper][4]] = 1;
+			if (mp != 0 && job1[oper][1] != job1[mp][2])
+				queue1[rear++] = mp;
+			if (jp != 0 && job1[oper][1] != job1[jp][2])
+				queue1[rear++] = jp;
+		}
+	}
+	int blocks_cnt = 0;
+	for (int mach_i = 1; mach_i <= m; mach_i++)
+	{
+		for (int oper_i = 1; oper_i <= n; oper_i++)
+		{
+			if (critical_flag[mach_i][oper_i] == 1 && oper_i <= n)
+			{
+				blocks[++blocks_cnt][0] = mach_i;
+				blocks[blocks_cnt][1] = oper_i;
+				while (critical_flag[mach_i][oper_i] == 1 && oper_i <= n)
+					oper_i += 1;
+				blocks[blocks_cnt][2] = oper_i - 1;
+			}
+		}
+	}
+	blocks[0][0] = blocks_cnt;
+	// calculate q
+	int flag[MAXM*MAXN], oper, js, ms, jp, mp;
+	front = rear = 0;
+	q[0] = 0;
+	memset(flag, 0, sizeof(flag));
+	for (int mach_i = 1; mach_i <= m; mach_i++)
+		flag[machine1[mach_i][n][0]] += 1;
+	for (int job_i = 1; job_i <= n; job_i++)
+	{
+		flag[job_i*m] += 1;
+		if (flag[job_i*m] == 2)
+			queue1[rear++] = job_i*m;
+	}
+	while (front != rear)
+	{
+		oper = queue1[front++];
+		js = oper + 1 <= m ? oper + 1 : 0;
+		ms = machine1[job1[oper][3]][job1[oper][4] + 1][0];
+		q[oper] = job_time[oper] + MAX(q[js], q[ms]);
+		jp = oper - 1;
+		mp = machine1[job1[oper][3]][job1[oper][4] - 1][0];
+		if (mp != 0)
+		{
+			flag[mp] += 1;
+			if (flag[mp] == 2)
+				queue1[rear++] = mp;
+		}
+		if (jp != 0)
+		{
+			flag[jp] += 1;
+			if (flag[jp] == 2)
+				queue1[rear++] = jp;
+		}
+	}
+}
 int main(int argc, char **argv)
 {
 	int rs = time(NULL);
-	rs = 1499240941;//1499650432
+	//rs = 1499240941;//1499650432
 	srand(rs);
 	char *argv_win[] = { "",	// 0
 		"_ifp", "instances\\DemirkolBenchmarksJobShop\\",	//"instances\\Dauzere_Data\\",
 		"_sfp","solutions\\best_solutions\\",	// solution file path
 		"_ifn", "rcmax_30_15_1",	"_suffix",".txt",	// 01a, .fjs cscmax_20_15_1 rcmax_40_15_5 rcmax_20_15_4
-		"_sfn","dmu15_rcmax_30_15_1",	// solution file name dmu45_cscmax_20_15_1 dmu21_rcmax_40_15_5 dmu01_rcmax_20_15_4
+		"_sfn","dmu15_rcmax_30_15_1pb_3372",	// solution file name dmu45_cscmax_20_15_1 dmu21_rcmax_40_15_5 dmu01_rcmax_20_15_4
 		"_sol_num", "6",
 		"_tt0","2", "_d1","5", "_d2", "12",
 		"_itr","12500","_best_obj","3343" 
@@ -1446,8 +1916,10 @@ int main(int argc, char **argv)
 	solver->d2 = stoi(argv_map.at("_d2"));
 	solver->iteration = stoi(argv_map.at("_itr"));
 	solver->best_known_makespan = stoi(argv_map.at("_best_obj"));	// read solution
-	solver->init_solution(1);
-	solver->ts(10000);
+	solver->read_solution(1, argv_map.at("_sfp") + argv_map.at("_sfn") + argv_map.at("_suffix"));
+	//solver->init_solution1(1);
+	//solver->ts(10000);
+
 	solver->tabu_search(1);
 #ifdef _WIN32
 	system("pause");
