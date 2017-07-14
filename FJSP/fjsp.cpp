@@ -861,7 +861,7 @@ void Solver::update_tabu(int sol_index, int mach_i, int u, int v)
 {
 	Tabu *tabu = new Tabu();
 	int r1 = MAX((makespan[sol_index] - best_known_makespan) / d1, d2);	// optimize by making it global
-	tabu->tabu_iteration = globel_iteration + tt0 + rand() / r1;
+	tabu->tabu_iteration = globel_iteration + tt0 + rand() % r1;
 	tabu->tabu_u = u;
 	tabu->tabu_oper_num = v - u + 1;
 	for (int i = 1; i <= tabu->tabu_oper_num; i++)
@@ -1383,9 +1383,10 @@ void Solver::insert_move(int sol_index, int best_sol_index)
 			end_time = clock();
 			check_solution(sol_index);
 			replace_solution(best_sol_index, sol_index);
+			check_solution(best_sol_index);
 			alg_best_iter = globel_iteration;
 			local_iter = 1;
-
+			 
 			cout << globel_iteration << "\t" << local_iter << "\t" << min_mach_i << "\t"
 				<< min_u << "\t" << min_v << "\t"
 				<< (min_move_type == BACKWARD_INSERT ? "b" : "f") << "\t"
@@ -1395,15 +1396,15 @@ void Solver::insert_move(int sol_index, int best_sol_index)
 				<< (end_time - start_time) / CLOCKS_PER_SEC
 				<< endl;
 		}
-		if (makespan[best_sol_index] <= 3348)
+		//if (makespan[best_sol_index] <= 3348)
 		//if (globel_iteration==1)
-		cout << globel_iteration << "\t" << local_iter << "\t" << min_mach_i << "\t"
+		/*cout << globel_iteration << "\t" << local_iter << "\t" << min_mach_i << "\t"
 		<< min_u << "\t" << min_v << "\t"
 		<< (min_move_type == BACKWARD_INSERT ? "b" : "f") << "\t"
 		<< min_makespan << "\t" << min_tb_makespan << "\t"
 		<< makespan[sol_index] << "\t" << makespan[best_sol_index] << "\t"
 		<< crit_block[0][0] << "\t"
-		<< endl;
+		<< endl;*/
 	}
 }
 void Solver::insert_move1(int sol_index, int best_sol_index)
@@ -1630,14 +1631,14 @@ void Solver::replace_solution(int dest, int src)
 }
 void Solver::tabu_search(int sol_index)
 {
-	int best_sol = 2, cur_sol = 3;
-	//init_solution(best_sol);
-	//calculate_q_crit_block(best_sol);
-	calculate_q_crit_block(sol_index);
-	replace_solution(best_sol, sol_index);
-	insert_move(sol_index, best_sol);
+	int best_sol = 2, cur_sol = sol_index;
+	init_solution(best_sol);
+	calculate_q_crit_block(best_sol);
+	//calculate_q_crit_block(cur_sol);
+	//replace_solution(best_sol, cur_sol);
+	//insert_move(cur_sol, best_sol);
 	globel_iteration = 0;
-	
+
 	check_solution(best_sol);
 
 	start_time = clock();
@@ -1895,7 +1896,7 @@ int main(int argc, char **argv)
 		"_ifp", "instances\\DemirkolBenchmarksJobShop\\",	//"instances\\Dauzere_Data\\",
 		"_sfp","solutions\\best_solutions\\",	// solution file path
 		"_ifn", "rcmax_30_15_1",	"_suffix",".txt",	// 01a, .fjs cscmax_20_15_1 rcmax_40_15_5 rcmax_20_15_4
-		"_sfn","dmu15_rcmax_30_15_1pb_3372",	// solution file name dmu45_cscmax_20_15_1 dmu21_rcmax_40_15_5 dmu01_rcmax_20_15_4
+		"_sfn","dmu15_rcmax_30_15_1pb_3384",	// solution file name dmu45_cscmax_20_15_1 dmu21_rcmax_40_15_5 dmu01_rcmax_20_15_4
 		"_sol_num", "6",
 		"_tt0","2", "_d1","5", "_d2", "12",
 		"_itr","12500","_best_obj","3343" 
@@ -1916,7 +1917,7 @@ int main(int argc, char **argv)
 	solver->d2 = stoi(argv_map.at("_d2"));
 	solver->iteration = stoi(argv_map.at("_itr"));
 	solver->best_known_makespan = stoi(argv_map.at("_best_obj"));	// read solution
-	solver->read_solution(1, argv_map.at("_sfp") + argv_map.at("_sfn") + argv_map.at("_suffix"));
+	//solver->read_solution(1, argv_map.at("_sfp") + argv_map.at("_sfn") + argv_map.at("_suffix"));
 	//solver->init_solution1(1);
 	//solver->ts(10000);
 
