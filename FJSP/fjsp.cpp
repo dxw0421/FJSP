@@ -129,7 +129,6 @@ public:
 		int tabu_iteration;	// the tabu iteration
 		int tabu_u, tabu_oper_num;	// the number of tabu operation
 		Solution::Operation *tabu_oper[MAXO];	// the tabu block of operations from u to v
-		int tabu_operation[MAXO];
 		Tabu *front, *next;
 	};
 	Tabu *tabu_list[MAXS][MAXM];
@@ -150,7 +149,6 @@ public:
 	void apply_move(int, int, int, int, MOVE_TYPE);
 	void update_tabu(int, int, int, int);
 	bool check_tabu(int, int, int, int, MOVE_TYPE);
-	bool check_cycle(int);
 	void calculate_q_crit_block(int);
 	void perturb(int, int, int);
 	void replace_solution(int, int);
@@ -478,55 +476,6 @@ void Solver::check_solution(int sol_index)
 		cout << "ERROR: makespan or makespan machine is wrong" << endl;
 		system("pause");
 	}
-}
-bool Solver::check_cycle(int sol_index)
-{
-	cout << "***check solution " << sol_index << " *** " << makespan[sol_index] << endl;
-	//memset(critical_flag, 0, sizeof(critical_flag));
-	int oper_num = 0;	// optimize by removing queue_num
-	int front = 0, rear = 0;
-	for (int mach_i = 1; mach_i <= instance->m; mach_i++)
-	{
-		if (machine[sol_index][mach_i][1]->pre_job_oper == dummy_oper[sol_index][START])	// alternative
-		{
-			queue[rear++] = machine[sol_index][mach_i][1];
-			critical_flag[mach_i][1] = 0;
-		}
-		else
-			critical_flag[mach_i][1] = 1;
-		for (int oper_i = 2; oper_i <= machine_oper_num[sol_index][mach_i]; oper_i++)
-		{
-			if (machine[sol_index][mach_i][oper_i]->pre_job_oper == dummy_oper[sol_index][START])
-				critical_flag[mach_i][oper_i] = 1;
-			else
-				critical_flag[mach_i][oper_i] = 2;
-		}
-		oper_num += machine_oper_num[sol_index][mach_i];
-	}
-	if (oper_num != instance->m*instance->n)
-	{
-		cout << "ERROR: the number of operations is wrong" << endl;
-		return true;
-	}
-	oper_num = 0;
-	while (front != rear)
-	{
-		Solution::Operation *oper = queue[front++];
-		oper_num += 1;
-		critical_flag[oper->next_job_oper->mach_i][oper->next_job_oper->oper_mach_i] -= 1;
-		critical_flag[oper->mach_i][oper->oper_mach_i + 1] -= 1;
-		if (critical_flag[oper->next_job_oper->mach_i][oper->next_job_oper->oper_mach_i] == 0)
-			queue[rear++] = oper->next_job_oper;
-		if (critical_flag[oper->mach_i][oper->oper_mach_i + 1] == 0 &&
-			machine[sol_index][oper->mach_i][oper->oper_mach_i + 1] != oper->next_job_oper)
-			queue[rear++] = machine[sol_index][oper->mach_i][oper->oper_mach_i + 1];
-	}
-	if (oper_num != instance->m*instance->n)
-	{
-		cout << "ERROR: the number of operations is wrong" << endl;
-		return true;
-	}
-	return false;
 }
 void Solver::init_solution(int sol_index)
 {
@@ -969,15 +918,6 @@ void Solver::insert_move(int sol_index, int best_sol_index)
 				<< (end_time - start_time) / CLOCKS_PER_SEC
 				<< endl;
 		}
-		//if (makespan[best_sol_index] <= 3348)
-		/*if (globel_iteration==1)
-		cout << globel_iteration << "\t" << local_iter << "\t" << min_mach_i << "\t"
-		<< min_u << "\t" << min_v << "\t"
-		<< (min_move_type == BACKWARD_INSERT ? "b" : "f") << "\t"
-		<< min_makespan << "\t" << min_tb_makespan << "\t"
-		<< makespan[sol_index] << "\t" << makespan[best_sol_index] << "\t"
-		<< crit_block[sol_index][0][0] << "\t"
-		<< endl;*/
 	}
 }
 void Solver::replace_solution(int dest, int src)
@@ -1003,9 +943,7 @@ void Solver::replace_solution(int dest, int src)
 		machine_oper_num[dest][mach_i]=machine_oper_num[src][mach_i];
 	}
 	for (int block_i = 0; block_i <= crit_block[src][0][0]; block_i++)
-	{
 		memcpy(crit_block[dest][block_i], crit_block[src][block_i], 3 * sizeof(int));
-	}
 	makespan[dest] = makespan[src];
 }
 void Solver::tabu_search(int sol_index)
@@ -1107,13 +1045,6 @@ void Solver::perturb(int sol_index, int best_sol_index, int ptr_len)
 		if (makespan[best_sol_index] > makespan[sol_index])
 			replace_solution(best_sol_index, sol_index);
 		//check_solution1(sol_index);
-
-		/*cout << globel_iteration << "*\t" << local_iter << "\t" << min_mach_i << "\t"
-			<< min_u << "\t" << min_v << "\t"
-			<< (min_move_type == BACKWARD_INSERT ? "b" : "f") << "\t"
-			<< makespan[sol_index] << "\t" << makespan[best_sol_index] << "\t"
-			<< crit_block[0][0] << "\t"
-			<< endl;*/
 	}
 }
 // determine critical path, and calculate q for all operations
@@ -1255,7 +1186,7 @@ void Solver::calculate_r(int sol_index)
 int main(int argc, char **argv)
 {
 	int rs = time(NULL);
-	//rs = 1499240941;//1499650432
+	//rs = 1499240941;//1499650432 *1500017660*
 	srand(rs);
 	char *argv_win[] = { "",	// 0
 		"_ifp", "instances\\DemirkolBenchmarksJobShop\\",	//"instances\\Dauzere_Data\\",
