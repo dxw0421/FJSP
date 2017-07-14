@@ -134,7 +134,7 @@ public:
 	Tabu *tabu_list[MAXS][MAXM];
 
 	int tt0, d1, d2;	// for tabu tenure
-	int best_known_makespan, ts_iteraion;
+	int best_known_makespan, ts_iteraion, ts_restart;
 
 	Solver(const Instance &, int);
 	void display_machine_operation(int, int)const;
@@ -592,29 +592,40 @@ void Solver::apply_move(int sol_index, int mach_i, int u, int v, MOVE_TYPE move_
 		machine[sol_index][mach_i][u] = oper_v;
 		machine[sol_index][mach_i][u]->oper_mach_i = u;
 	}
-	int start_line[MAXM];
-	for (int i = 0; i < MAXM; i++)
-		start_line[i] = 100;
-	memset(critical_flag, 0, sizeof(critical_flag));
 
 	int front = 0, rear = 0;
-	for (int mach_i = 1; mach_i <= instance->m; mach_i++)
+	memset(critical_flag, 0, sizeof(critical_flag));
+	queue[rear++] = machine[sol_index][mach_i][u];
+	critical_flag[queue[0]->mach_i][queue[0]->oper_mach_i] = 0;	// in-degree is 0
+	while (front != rear)
 	{
-		if (machine[sol_index][mach_i][1]->pre_job_oper == dummy_oper[sol_index][START])	// alternative
+		Solution::Operation *oper = queue[front++];
+		if (oper->next_job_oper != dummy_oper[sol_index][END])
 		{
-			queue[rear++] = machine[sol_index][mach_i][1];
-			critical_flag[mach_i][1] = 0;
+			if (critical_flag[oper->next_job_oper->mach_i][oper->next_job_oper->oper_mach_i] == 0)
+			{
+				critical_flag[oper->next_job_oper->mach_i][oper->next_job_oper->oper_mach_i] = 1;
+				queue[rear++] = oper->next_job_oper;
+			}
+			else if (critical_flag[oper->next_job_oper->mach_i][oper->next_job_oper->oper_mach_i] == 1)
+				critical_flag[oper->next_job_oper->mach_i][oper->next_job_oper->oper_mach_i] = 2;
 		}
-		else
-			critical_flag[mach_i][1] = 1;
-		for (int oper_i = 2; oper_i <= machine_oper_num[sol_index][mach_i]; oper_i++)
+		if (machine[sol_index][oper->mach_i][oper->oper_mach_i + 1] != oper->next_job_oper&&
+			machine[sol_index][oper->mach_i][oper->oper_mach_i + 1] != dummy_oper[sol_index][END])
 		{
-			if (machine[sol_index][mach_i][oper_i]->pre_job_oper == dummy_oper[sol_index][START])
-				critical_flag[mach_i][oper_i] = 1;
-			else
-				critical_flag[mach_i][oper_i] = 2;
+			if (critical_flag[oper->mach_i][oper->oper_mach_i + 1] == 0)
+			{
+				critical_flag[oper->mach_i][oper->oper_mach_i + 1] = 1;
+				queue[rear++] = machine[sol_index][oper->mach_i][oper->oper_mach_i + 1];
+			}
+			else if (critical_flag[oper->mach_i][oper->oper_mach_i + 1] == 1)
+				critical_flag[oper->mach_i][oper->oper_mach_i + 1] = 2;
 		}
 	}
+
+	front = 0, rear = 0;
+	queue[rear++] = machine[sol_index][mach_i][u];
+	
 	while (front != rear)
 	{
 		Solution::Operation *oper = queue[front++];
@@ -957,7 +968,7 @@ void Solver::tabu_search(int sol_index)
 	//check_solution(best_sol);
 	//check_solution(cur_sol);
 
-	for (int cur_iter = 1; cur_iter <= 200; cur_iter++)
+	for (int cur_iter = 1; cur_iter <= ts_restart; cur_iter++)
 	{
 		replace_solution(cur_sol, best_sol);
 		calculate_q_crit_block(cur_sol);
@@ -965,6 +976,11 @@ void Solver::tabu_search(int sol_index)
 		clear_tabu_list(cur_sol);
 		cout << cur_iter << " **********************************" << endl;
 	}
+	end_time = clock();
+	cout << global_iteration << "\t"
+		<< makespan[sol_index] << "\t" << best_known_makespan << "\t"
+		<< (end_time - start_time) / CLOCKS_PER_SEC
+		<< endl;
 }
 void Solver::perturb(int sol_index, int best_sol_index, int ptr_len)
 {
@@ -1094,7 +1110,7 @@ void Solver::calculate_q_crit_block(int sol_index)
 		}
 	}
 	crit_block[sol_index][0][0] = block_cnt;
-
+	
 	// calculate q for all operations
 	front = 0, rear = 0;
 	memset(critical_flag, 0, sizeof(critical_flag));
@@ -1191,11 +1207,11 @@ int main(int argc, char **argv)
 	char *argv_win[] = { "",	// 0
 		"_ifp", "instances\\DemirkolBenchmarksJobShop\\",	//"instances\\Dauzere_Data\\",
 		"_sfp","solutions\\best_solutions\\",	// solution file path
-		"_ifn", "rcmax_50_20_2",	"_suffix",".txt",	// 01a, .fjs cscmax_20_15_1 rcmax_40_15_5 rcmax_20_15_4
-		"_sfn","dmu15_rcmax_30_15_1pb_3384",	// solution file name dmu45_cscmax_20_15_1 dmu21_rcmax_40_15_5 dmu01_rcmax_20_15_4
-		"_sol_num", "6",
+		"_ifn", "rcmax_30_15_1",	"_suffix",".txt",	// 01a, .fjs cscmax_20_15_1 rcmax_30_15_1(3343) rcmax_50_20_2(5621) rcmax_40_20_2(4691 ) rcmax_30_15_9(3430) rcmax_20_15_8(2669)
+		"_sfn","dmu15_rcmax_30_15_1pb_3384",	// solution file name 
+		"_sol_num", "6","_best_obj","3343",
 		"_tt0","2", "_d1","5", "_d2", "12",
-		"_itr","12500","_best_obj","5621"
+		"_itr","12500","_ts_rs","100"
 	};
 	cout << "This is the flexible job shop scheduling problem" << endl;
 #ifdef _WIN32
@@ -1212,6 +1228,7 @@ int main(int argc, char **argv)
 	solver->d1 = stoi(argv_map.at("_d1"));
 	solver->d2 = stoi(argv_map.at("_d2"));
 	solver->ts_iteraion = stoi(argv_map.at("_itr"));
+	solver->ts_restart = stoi(argv_map.at("_ts_rs"));
 	solver->best_known_makespan = stoi(argv_map.at("_best_obj"));	// read solution
 	//solver->read_solution(1, argv_map.at("_sfp") + argv_map.at("_sfn") + argv_map.at("_suffix"));
 	//solver->init_solution1(1);
