@@ -593,61 +593,61 @@ void Solver::apply_move(int sol_index, int mach_i, int u, int v, MOVE_TYPE move_
 	}
 
 
-	//int front = 0, rear = 0;
-	//memset(critical_flag, 0, sizeof(critical_flag));
-	//for (int mach_i = 1; mach_i <= instance->m; mach_i++)
-	//{
-	//	if (machine[sol_index][mach_i][1]->pre_job_oper == dummy_oper[sol_index][START])	// alternative
-	//	{
-	//		queue[rear++] = machine[sol_index][mach_i][1];
-	//		critical_flag[mach_i][1] = 0;
-	//	}
-	//	else
-	//		critical_flag[mach_i][1] = 1;
-	//	for (int oper_i = 2; oper_i <= machine_oper_num[sol_index][mach_i]; oper_i++)
-	//	{
-	//		if (machine[sol_index][mach_i][oper_i]->pre_job_oper == dummy_oper[sol_index][START])
-	//			critical_flag[mach_i][oper_i] = 1;
-	//		else
-	//			critical_flag[mach_i][oper_i] = 2;
-	//	}
-	//}
-
 	int front = 0, rear = 0;
 	memset(critical_flag, 0, sizeof(critical_flag));
-	queue[rear++] = machine[sol_index][mach_i][u];
-	critical_flag[queue[0]->mach_i][queue[0]->oper_mach_i] = 0;	// in-degree is 0
-	while (front != rear)
+	for (int mach_i = 1; mach_i <= instance->m; mach_i++)
 	{
-		Solution::Operation *oper = queue[front++];
-		/*if (oper->mach_i == 2 && oper->oper_mach_i == 23)
-			cout << endl;
-		if (oper->mach_i == 3 && oper->oper_mach_i == 21)
-			cout << endl;*/
-		if (oper->next_job_oper != dummy_oper[sol_index][END])
+		if (machine[sol_index][mach_i][1]->pre_job_oper == dummy_oper[sol_index][START])	// alternative
 		{
-			if (critical_flag[oper->next_job_oper->mach_i][oper->next_job_oper->oper_mach_i] == 0)
-			{
-				critical_flag[oper->next_job_oper->mach_i][oper->next_job_oper->oper_mach_i] = 1;
-				queue[rear++] = oper->next_job_oper;
-			}
-			else if (critical_flag[oper->next_job_oper->mach_i][oper->next_job_oper->oper_mach_i] == 1)
-				critical_flag[oper->next_job_oper->mach_i][oper->next_job_oper->oper_mach_i] = 2;
+			queue[rear++] = machine[sol_index][mach_i][1];
+			critical_flag[mach_i][1] = 0;
 		}
-		if (/*machine[sol_index][oper->mach_i][oper->oper_mach_i + 1] != oper->next_job_oper&&*/
-			machine[sol_index][oper->mach_i][oper->oper_mach_i + 1] != dummy_oper[sol_index][END])
+		else
+			critical_flag[mach_i][1] = 1;
+		for (int oper_i = 2; oper_i <= machine_oper_num[sol_index][mach_i]; oper_i++)
 		{
-			if (critical_flag[oper->mach_i][oper->oper_mach_i + 1] == 0)
-			{
-				critical_flag[oper->mach_i][oper->oper_mach_i + 1] = 1;
-				queue[rear++] = machine[sol_index][oper->mach_i][oper->oper_mach_i + 1];
-			}
-			else if (critical_flag[oper->mach_i][oper->oper_mach_i + 1] == 1)
-				critical_flag[oper->mach_i][oper->oper_mach_i + 1] = 2;
+			if (machine[sol_index][mach_i][oper_i]->pre_job_oper == dummy_oper[sol_index][START])
+				critical_flag[mach_i][oper_i] = 1;
+			else
+				critical_flag[mach_i][oper_i] = 2;
 		}
 	}
-	front = 0, rear = 0;
-	queue[rear++] = machine[sol_index][mach_i][u];
+
+	//int front = 0, rear = 0;
+	//memset(critical_flag, 0, sizeof(critical_flag));
+	//queue[rear++] = machine[sol_index][mach_i][u];
+	//critical_flag[queue[0]->mach_i][queue[0]->oper_mach_i] = 0;	// in-degree is 0
+	//while (front != rear)
+	//{
+	//	Solution::Operation *oper = queue[front++];
+	//	/*if (oper->mach_i == 2 && oper->oper_mach_i == 23)
+	//		cout << endl;
+	//	if (oper->mach_i == 3 && oper->oper_mach_i == 21)
+	//		cout << endl;*/
+	//	if (oper->next_job_oper != dummy_oper[sol_index][END])
+	//	{
+	//		if (critical_flag[oper->next_job_oper->mach_i][oper->next_job_oper->oper_mach_i] == 0)
+	//		{
+	//			critical_flag[oper->next_job_oper->mach_i][oper->next_job_oper->oper_mach_i] = 1;
+	//			queue[rear++] = oper->next_job_oper;
+	//		}
+	//		else if (critical_flag[oper->next_job_oper->mach_i][oper->next_job_oper->oper_mach_i] == 1)
+	//			critical_flag[oper->next_job_oper->mach_i][oper->next_job_oper->oper_mach_i] = 2;
+	//	}
+	//	if (/*machine[sol_index][oper->mach_i][oper->oper_mach_i + 1] != oper->next_job_oper&&*/
+	//		machine[sol_index][oper->mach_i][oper->oper_mach_i + 1] != dummy_oper[sol_index][END])
+	//	{
+	//		if (critical_flag[oper->mach_i][oper->oper_mach_i + 1] == 0)
+	//		{
+	//			critical_flag[oper->mach_i][oper->oper_mach_i + 1] = 1;
+	//			queue[rear++] = machine[sol_index][oper->mach_i][oper->oper_mach_i + 1];
+	//		}
+	//		else if (critical_flag[oper->mach_i][oper->oper_mach_i + 1] == 1)
+	//			critical_flag[oper->mach_i][oper->oper_mach_i + 1] = 2;
+	//	}
+	//}
+	//front = 0, rear = 0;
+	//queue[rear++] = machine[sol_index][mach_i][u];
 
 	
 	while (front != rear)
@@ -804,8 +804,8 @@ void Solver::insert_move(int sol_index, int best_sol_index)
 			{
 				if (machine[sol_index][mach_i][u]->job_i == machine[sol_index][mach_i][v]->job_i)
 					continue;
-				if (machine[sol_index][mach_i][v]->q + machine[sol_index][mach_i][v]->t >= 
-					machine[sol_index][mach_i][u]->next_job_oper->q + machine[sol_index][mach_i][u]->next_job_oper->t &&	// q[v]>=q[JS[u]]
+				if (machine[sol_index][mach_i][v]->q + machine[sol_index][mach_i][v]->t > 
+					machine[sol_index][mach_i][u]->next_job_oper->q &&	// q[v] + t[v] > q[JS[u]]
 					machine[sol_index][mach_i][u]->pre_job_oper != dummy_oper[sol_index][START])
 				{
 					// move u behind v
@@ -835,8 +835,8 @@ void Solver::insert_move(int sol_index, int best_sol_index)
 						}
 					}
 				}
-				if (v != u + 1 && machine[sol_index][mach_i][u]->end_time >= 
-					machine[sol_index][mach_i][v]->pre_job_oper->end_time&&	// r[u] + t[u] >= r[JP[v]] + t[JP[v]]
+				if (v != u + 1 && machine[sol_index][mach_i][u]->end_time > 
+					machine[sol_index][mach_i][v]->pre_job_oper->start_time&&	// r[u] + t[u] > r[JP[v]]
 					machine[sol_index][mach_i][u]->pre_job_oper != dummy_oper[sol_index][START])
 				{
 					// move v before u
@@ -873,8 +873,8 @@ void Solver::insert_move(int sol_index, int best_sol_index)
 			{
 				if (machine[sol_index][mach_i][u]->job_i == machine[sol_index][mach_i][v]->job_i)
 					continue;
-				if (machine[sol_index][mach_i][v]->q + machine[sol_index][mach_i][v]->t >= 
-					machine[sol_index][mach_i][u]->next_job_oper->q + machine[sol_index][mach_i][u]->next_job_oper->t &&	// q[v]>=q[JS[u]]
+				if (machine[sol_index][mach_i][v]->q + machine[sol_index][mach_i][v]->t > 
+					machine[sol_index][mach_i][u]->next_job_oper->q &&	// q[v] + t[v] > q[JS[u]]
 					machine[sol_index][mach_i][v]->next_job_oper != dummy_oper[sol_index][END])
 				{
 					// move u behind v
@@ -904,8 +904,8 @@ void Solver::insert_move(int sol_index, int best_sol_index)
 						}
 					}
 				}
-				if (v != u + 1 && machine[sol_index][mach_i][u]->end_time >= 
-					machine[sol_index][mach_i][v]->pre_job_oper->end_time&&	// r[u] + t[u] >= r[JP[v]] + t[JP[v]]
+				if (v != u + 1 && machine[sol_index][mach_i][u]->end_time > 
+					machine[sol_index][mach_i][v]->pre_job_oper->start_time&&	// r[u] + t[u] > r[JP[v]]
 					machine[sol_index][mach_i][v]->next_job_oper != dummy_oper[sol_index][END])
 				{
 					// move v before u
@@ -1031,8 +1031,8 @@ void Solver::perturb(int sol_index, int best_sol_index, int ptr_len)
 			{
 				if (machine[sol_index][mach_i][u]->job_i == machine[sol_index][mach_i][v]->job_i)
 					continue;
-				if (machine[sol_index][mach_i][v]->q + machine[sol_index][mach_i][v]->t >= 
-					machine[sol_index][mach_i][u]->next_job_oper->q + machine[sol_index][mach_i][u]->next_job_oper->t)	// q[v]>=q[JS[u]]
+				if (machine[sol_index][mach_i][v]->q + machine[sol_index][mach_i][v]->t >
+					machine[sol_index][mach_i][u]->next_job_oper->q)	// q[v] + t[v] > q[JS[u]]
 				{
 					// move u behind v
 					equ_cnt += 1;
@@ -1044,7 +1044,7 @@ void Solver::perturb(int sol_index, int best_sol_index, int ptr_len)
 						min_move_type = BACKWARD_INSERT;
 					}
 				}
-				if (machine[sol_index][mach_i][u]->end_time >= machine[sol_index][mach_i][v]->pre_job_oper->end_time)	// r[u] + t[u] >= r[JP[v]] + t[JP[v]]
+				if (machine[sol_index][mach_i][u]->end_time > machine[sol_index][mach_i][v]->pre_job_oper->start_time)	// r[u] + t[u] > r[JP[v]]
 				{
 					// move v before u
 					equ_cnt += 1;
@@ -1063,8 +1063,8 @@ void Solver::perturb(int sol_index, int best_sol_index, int ptr_len)
 			{
 				if (machine[sol_index][mach_i][u]->job_i == machine[sol_index][mach_i][v]->job_i)
 					continue;
-				if (machine[sol_index][mach_i][v]->q + machine[sol_index][mach_i][v]->t >= 
-					machine[sol_index][mach_i][u]->next_job_oper->q + machine[sol_index][mach_i][u]->next_job_oper->t)	// q[v]>=q[JS[u]]
+				if (machine[sol_index][mach_i][v]->q + machine[sol_index][mach_i][v]->t > 
+					machine[sol_index][mach_i][u]->next_job_oper->q)	// q[v] + t[v] > q[JS[u]]
 				{
 					// move u behind v
 					equ_cnt += 1;
@@ -1076,7 +1076,7 @@ void Solver::perturb(int sol_index, int best_sol_index, int ptr_len)
 						min_move_type = BACKWARD_INSERT;
 					}
 				}
-				if (machine[sol_index][mach_i][u]->end_time >= machine[sol_index][mach_i][v]->pre_job_oper->end_time)	// r[u] + t[u] >= r[JP[v]] + t[JP[v]]
+				if (machine[sol_index][mach_i][u]->end_time > machine[sol_index][mach_i][v]->pre_job_oper->start_time)	// r[u] + t[u] > r[JP[v]]
 				{
 					// move v before u
 					equ_cnt += 1;
@@ -1239,11 +1239,11 @@ int main(int argc, char **argv)
 	//rs = 1500091415;//1499650432 *1500017660*
 	srand(rs);
 	char *argv_win[] = { "",	// 0
-		/*"_ifp", "instances\\Dauzere_Data\\",	// instances\\Dauzere_Data\\ | instances\\DemirkolBenchmarksJobShop\\ */
+		//"_ifp", "instances\\Dauzere_Data\\",	// instances\\Dauzere_Data\\ | instances\\DemirkolBenchmarksJobShop\\ 
 		"_ifp", "instances\\DemirkolBenchmarksJobShop\\",
 		"_sfp","solutions\\best_solutions\\",	// solution file path
-		/*"_ifn", "01a",	"_suffix",".fjs", "_best_obj","2505",	// 01a, .fjs | cscmax_20_15_1 .txt */
-		"_ifn", "rcmax_30_15_1", "_suffix",".txt", "_best_obj","3343",
+		//"_ifn", "01a",	"_suffix",".fjs", "_best_obj","2505",	// 01a, .fjs | cscmax_20_15_1 .txt 
+		"_ifn", "rcmax_40_20_2", "_suffix",".txt", "_best_obj","4691",
 		"_sfn","dmu15_rcmax_30_15_1pb_3384",	// solution file name 
 		"_sol_num", "6", "_tt0","2", "_d1","5", "_d2", "12",	// 01a (2505) rcmax_30_15_1(3343) rcmax_50_20_2(5621) rcmax_40_20_2(4691 ) rcmax_30_15_9(3430) rcmax_20_15_8(2669)
 		"_itr","12500","_ts_rs","100"
