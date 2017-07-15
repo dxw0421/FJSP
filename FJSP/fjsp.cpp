@@ -936,10 +936,7 @@ void Solver::insert_move(int sol_index, int best_sol_index)
 					}
 				}
 			}
-
 		}
-		if (global_iteration == 94876)
-			cout << endl;
 		if (min_makespan == INT_MAX)
 		{
 			perturb(sol_index, best_sol_index, 2);
@@ -1239,7 +1236,7 @@ void Solver::calculate_r(int sol_index)
 int main(int argc, char **argv)
 {
 	int rs = time(NULL);
-	rs = 1500091415;//1499650432 *1500017660*
+	//rs = 1500091415;//1499650432 *1500017660*
 	srand(rs);
 	char *argv_win[] = { "",	// 0
 		/*"_ifp", "instances\\Dauzere_Data\\",	// instances\\Dauzere_Data\\ | instances\\DemirkolBenchmarksJobShop\\ */
