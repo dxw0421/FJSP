@@ -154,6 +154,7 @@ public:
 	void replace_solution(int, int);
 	void clear_tabu_list(int);
 	void calculate_r(int);
+	void change_machine(int, int, int);
 };
 Instance::Instance(string _file_input) :file_input(_file_input), total_num_operation(0)
 {
@@ -965,6 +966,37 @@ void Solver::insert_move(int sol_index, int best_sol_index)
 		}
 	}
 }
+void Solver::change_machine(int sol_index, int mach, int oper_mach_i)
+{
+	for (int block_i = 1; block_i <= crit_block[sol_index][0][0]; block_i++)
+	{
+		int mach_i = crit_block[sol_index][block_i][0];
+		int u = crit_block[sol_index][block_i][1];
+		for (int v = u + 1; v <= crit_block[sol_index][block_i][2]; v++)
+		{
+			if (machine[sol_index][mach_i][u]->job_i == machine[sol_index][mach_i][v]->job_i)
+				continue;
+			if (machine[sol_index][mach_i][v]->q + machine[sol_index][mach_i][v]->t >
+				machine[sol_index][mach_i][u]->next_job_oper->q)	// q[v] + t[v] > q[JS[u]]
+			{
+			}
+		}
+		for (int u = crit_block[sol_index][block_i][1]; u <= crit_block[sol_index][block_i][2]; u++)
+		{
+			int mach_i = crit_block[sol_index][block_i][0];
+			int job_i = machine[sol_index][mach_i][u]->job_i;
+			int oper_job_i = machine[sol_index][mach_i][u]->oper_job_i;
+			cout << "job_i: " << job_i << ", oper_job_i: " << oper_job_i
+				<< " mach_i: " << mach_i << ", oper_mach_i: " << u << " | ";
+			for (int proc_i = 1; proc_i <= instance->job_vec[job_i]->oper_vec[oper_job_i]->num_mach; proc_i++)
+			{
+				cout << instance->job_vec[job_i]->oper_vec[oper_job_i]->proc_vec[proc_i]->mach_i << ", "
+					<< instance->job_vec[job_i]->oper_vec[oper_job_i]->proc_vec[proc_i]->t << "\t";
+			}
+			cout << endl;
+		}
+	}
+}
 void Solver::replace_solution(int dest, int src)
 {
 	for (int job_i = 1; job_i <= instance->n; job_i++)
@@ -1089,6 +1121,11 @@ void Solver::perturb(int sol_index, int best_sol_index, int ptr_len)
 					}
 				}
 			}
+		}
+		if (equ_cnt == 0)
+		{
+			change_machine(sol_index, 0, 0);
+			continue;
 		}
 		apply_move(sol_index, min_mach_i, min_u, min_v, min_move_type);
 		calculate_q_crit_block(sol_index);
@@ -1236,14 +1273,14 @@ void Solver::calculate_r(int sol_index)
 int main(int argc, char **argv)
 {
 	int rs = time(NULL);
-	//rs = 1500091415;//1499650432 *1500017660*
+	rs = 1500550915;//1499650432 *1500017660*
 	srand(rs);
 	char *argv_win[] = { "",	// 0
-		//"_ifp", "instances\\Dauzere_Data\\",	// instances\\Dauzere_Data\\ | instances\\DemirkolBenchmarksJobShop\\ 
-		"_ifp", "instances\\DemirkolBenchmarksJobShop\\",
+		"_ifp", "instances\\Dauzere_Data\\",	// instances\\Dauzere_Data\\ | instances\\DemirkolBenchmarksJobShop\\ 
+		//"_ifp", "instances\\DemirkolBenchmarksJobShop\\",
 		"_sfp","solutions\\best_solutions\\",	// solution file path
-		//"_ifn", "01a",	"_suffix",".fjs", "_best_obj","2505",	// 01a, .fjs | cscmax_20_15_1 .txt 
-		"_ifn", "rcmax_40_20_2", "_suffix",".txt", "_best_obj","4691",
+		"_ifn", "01a",	"_suffix",".fjs", "_best_obj","2505",	// 01a, .fjs | cscmax_20_15_1 .txt 
+		//"_ifn", "rcmax_40_20_2", "_suffix",".txt", "_best_obj","4691",
 		"_sfn","dmu15_rcmax_30_15_1pb_3384",	// solution file name 
 		"_sol_num", "6", "_tt0","2", "_d1","5", "_d2", "12",	// 01a (2505) rcmax_30_15_1(3343) rcmax_50_20_2(5621) rcmax_40_20_2(4691 ) rcmax_30_15_9(3430) rcmax_20_15_8(2669)
 		"_itr","12500","_ts_rs","100"
