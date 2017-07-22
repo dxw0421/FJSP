@@ -155,6 +155,7 @@ public:
 	void clear_tabu_list(int);
 	void calculate_r(int);
 	void change_machine(int, int, int);
+	void apply_assign_move(int, int, int, int, int);
 };
 Instance::Instance(string _file_input) :file_input(_file_input), total_num_operation(0)
 {
@@ -968,34 +969,126 @@ void Solver::insert_move(int sol_index, int best_sol_index)
 }
 void Solver::change_machine(int sol_index, int mach, int oper_mach_i)
 {
-	for (int block_i = 1; block_i <= crit_block[sol_index][0][0]; block_i++)
+	int min_makespan = INT_MAX, min_u, min_mach_u, min_v, min_mach_v, equ_cnt;
+	for (int block_i = 1; block_i <= crit_block[sol_index][0][0]; block_i++)	// for each block
 	{
-		int mach_i = crit_block[sol_index][block_i][0];
-		int u = crit_block[sol_index][block_i][1];
-		for (int v = u + 1; v <= crit_block[sol_index][block_i][2]; v++)
+		int mach_u = crit_block[sol_index][block_i][0];
+		for (int u = crit_block[sol_index][block_i][1]; u <= crit_block[sol_index][block_i][2]; u++)	// for each critical operation
 		{
-			if (machine[sol_index][mach_i][u]->job_i == machine[sol_index][mach_i][v]->job_i)
+			int job_i = machine[sol_index][mach_u][u]->job_i;
+			int oper_job_i = machine[sol_index][mach_u][u]->oper_job_i;
+			if (instance->job_vec[job_i]->oper_vec[oper_job_i]->num_mach == 1)
 				continue;
-			if (machine[sol_index][mach_i][v]->q + machine[sol_index][mach_i][v]->t >
-				machine[sol_index][mach_i][u]->next_job_oper->q)	// q[v] + t[v] > q[JS[u]]
-			{
-			}
-		}
-		for (int u = crit_block[sol_index][block_i][1]; u <= crit_block[sol_index][block_i][2]; u++)
-		{
-			int mach_i = crit_block[sol_index][block_i][0];
-			int job_i = machine[sol_index][mach_i][u]->job_i;
-			int oper_job_i = machine[sol_index][mach_i][u]->oper_job_i;
 			cout << "job_i: " << job_i << ", oper_job_i: " << oper_job_i
-				<< " mach_i: " << mach_i << ", oper_mach_i: " << u << " | ";
-			for (int proc_i = 1; proc_i <= instance->job_vec[job_i]->oper_vec[oper_job_i]->num_mach; proc_i++)
+				<< " mach_i: " << mach_u << ", oper_mach_i: " << u << " | ";
+			
+			for (int proc_i = 1; proc_i <= instance->job_vec[job_i]->oper_vec[oper_job_i]->num_mach; proc_i++)	// for each process
 			{
-				cout << instance->job_vec[job_i]->oper_vec[oper_job_i]->proc_vec[proc_i]->mach_i << ", "
-					<< instance->job_vec[job_i]->oper_vec[oper_job_i]->proc_vec[proc_i]->t << "\t";
+				if (instance->job_vec[job_i]->oper_vec[oper_job_i]->proc_vec[proc_i]->mach_i == mach_u)	// the same machine
+					continue;
+				int left_i = instance->total_num_operation, right_i = 0;
+				int mach_v = instance->job_vec[job_i]->oper_vec[oper_job_i]->proc_vec[proc_i]->mach_i;
+				Solution::Operation *oper_u = machine[sol_index][mach_u][u];
+				for (int m_i = 1; m_i <= machine_oper_num[sol_index][mach_v]; m_i++)	// determine right_i
+				{
+					Solution::Operation *oper_v = machine[sol_index][mach_v][m_i];	// move oper_u after v
+					if (oper_u->next_job_oper->end_time <= oper_v->start_time)
+						//if (oper_u->next_job_oper->q >= v->q + v->t)
+					{
+						right_i = m_i;
+						break;
+					}
+				}
+				for (int m_i = machine_oper_num[sol_index][mach_v]; m_i >= 1; m_i--)	//determine left_i
+				{
+					Solution::Operation *oper_v = machine[sol_index][mach_v][m_i];
+					if (oper_v->q >= oper_u->pre_job_oper->q + oper_u->pre_job_oper->t)
+						//if (v->end_time <= oper_u->pre_job_oper->start_time)
+					{
+						left_i = m_i;
+						break;
+					}
+				}
+				cout << mach_v << "," << left_i << "," << right_i << endl;
+				if (left_i >= right_i)
+					continue;
+
+				int v_t = instance->job_vec[job_i]->oper_vec[oper_job_i]->proc_vec[proc_i]->t;
+
+				for (int v = left_i; v < right_i; v++)	// for each feasible position
+				{
+					Solution::Operation *oper_v = machine[sol_index][mach_v][v];	// insert oper_u after v
+					oper_u->apx_r = MAX(oper_u->pre_job_oper->end_time, oper_v->end_time);
+					oper_u->apx_q = MAX(oper_u->next_job_oper->q + oper_u->next_job_oper->t,
+						machine[sol_index][mach_v][v + 1]->q + machine[sol_index][mach_v][v + 1]->t);	// v->next_mach_oper
+					if (min_makespan > oper_u->apx_r + oper_u->apx_q + v_t)
+					{
+						min_makespan = oper_u->apx_r + oper_u->apx_q + v_t;
+						min_u = u;
+						min_mach_u = mach_u;
+						min_v = v;
+						min_mach_v = mach_v;
+						equ_cnt = 1;
+					}
+					else if (min_makespan == oper_u->apx_r + oper_u->apx_q + v_t)
+					{
+						equ_cnt += 1;
+						if (rand() % equ_cnt == 0)
+						{
+							min_u = u;
+							min_mach_u = mach_u;
+							min_v = v;
+							min_mach_v = mach_v;
+						}
+					}
+					cout << v << ", " << oper_u->apx_r + oper_u->apx_q + v_t << "\t";
+				}
 			}
 			cout << endl;
 		}
 	}
+	cout << min_mach_u << ", " << min_u << ", "
+		<< min_mach_v << ", " << min_v << ", " << min_makespan << endl;
+}
+void Solver::apply_assign_move(int sol_index, int mach_u, int u, int mach_v, int v)
+{
+	/*if (move_type == BACKWARD_INSERT)
+	{
+		Solution::Operation *oper_u = machine[sol_index][mach_i][u];
+		for (int i = u; i < v; i++)
+		{
+			machine[sol_index][mach_i][i] = machine[sol_index][mach_i][i + 1];
+			machine[sol_index][mach_i][i]->oper_mach_i = i;
+		}
+		machine[sol_index][mach_i][v] = oper_u;
+		machine[sol_index][mach_i][v]->oper_mach_i = v;
+	}
+	else
+	{
+		Solution::Operation *oper_v = machine[sol_index][mach_i][v];
+		for (int i = v; i > u; i--)
+		{
+			machine[sol_index][mach_i][i] = machine[sol_index][mach_i][i - 1];
+			machine[sol_index][mach_i][i]->oper_mach_i = i;
+		}
+		machine[sol_index][mach_i][u] = oper_v;
+		machine[sol_index][mach_i][u]->oper_mach_i = u;
+	}*/
+	for (int i = machine_oper_num[sol_index][mach_v]; i > v; i--)
+	{
+		machine[sol_index][mach_v][i + 1] = machine[sol_index][mach_v][i];
+		machine[sol_index][mach_v][i + 1]->oper_mach_i = i + 1;
+	}
+	machine[sol_index][mach_v][v + 1] = machine[sol_index][mach_u][u];
+	machine[sol_index][mach_v][v + 1]->oper_mach_i = v + 1;
+	machine_oper_num[sol_index][mach_v] += 1;
+
+	for (int i = u; i < machine_oper_num[sol_index][mach_u]; i++)
+	{
+		machine[sol_index][mach_u][i] = machine[sol_index][mach_u][i + 1];
+		machine[sol_index][mach_u][i]->oper_mach_i = i;
+	}
+	machine_oper_num[sol_index][mach_u] -= 1;
 }
 void Solver::replace_solution(int dest, int src)
 {
