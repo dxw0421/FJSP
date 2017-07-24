@@ -143,7 +143,7 @@ public:
 	void display_solution(int)const;
 	void check_solution(int);
 	void insert_move(int, int);
-	void tabu_search(int);
+	void tabu_search();
 	void try_backward_insert_move(int, int&, int, int, int);
 	void try_forward_insert_move(int, int&, int, int, int);
 	void apply_move(int, int, int, int, MOVE_TYPE);
@@ -791,7 +791,7 @@ void Solver::clear_tabu_list(int sol_index)
 }
 void Solver::insert_move(int sol_index, int sol_index_best)
 {
-	cout << "insert move, solution " << sol_index << ", " << makespan[sol_index] << endl;
+	//cout << "insert move, solution " << sol_index << ", " << makespan[sol_index] << endl;
 	int min_u, min_v, min_mach_i, mkspan, min_makespan, equ_cnt;
 	MOVE_TYPE move_type, min_move_type, min_tb_move_type;
 	for (int local_iter = 1; local_iter <= ts_iteraion; local_iter++)
@@ -966,6 +966,8 @@ void Solver::insert_move(int sol_index, int sol_index_best)
 				<< endl;
 		}
 	}
+	cout << "insert move, solution " << global_iteration << ", " 
+		<< makespan[sol_index] << ", " << makespan[sol_index_best] << endl;
 }
 void Solver::change_machine(int sol_index, int sol_index_best, int temp)
 {
@@ -1047,8 +1049,10 @@ void Solver::change_machine(int sol_index, int sol_index_best, int temp)
 			cout << endl;
 		}
 	}
-	check_solution(sol_index);
+	//check_solution(sol_index);
 	apply_assign_move(sol_index, min_mach_u, min_u, min_mach_v, min_v);
+	cout << min_mach_u << "\t" << min_u << "\t"
+		<< min_mach_v << "\t" << min_v << "\t" << min_makespan << endl;
 	calculate_r(sol_index);
 	calculate_q_crit_block(sol_index);
 	check_solution(sol_index);
@@ -1099,7 +1103,7 @@ void Solver::apply_assign_move(int sol_index, int mach_u, int u, int mach_v, int
 		machine[sol_index][mach_i][u] = oper_v;
 		machine[sol_index][mach_i][u]->oper_mach_i = u;
 	}*/
-	for (int i = machine_oper_num[sol_index][mach_v]; i > v; i--)
+	for (int i = machine_oper_num[sol_index][mach_v] + 1; i > v; i--)
 	{
 		machine[sol_index][mach_v][i + 1] = machine[sol_index][mach_v][i];
 		machine[sol_index][mach_v][i + 1]->oper_mach_i = i + 1;
@@ -1109,7 +1113,7 @@ void Solver::apply_assign_move(int sol_index, int mach_u, int u, int mach_v, int
 	machine[sol_index][mach_v][v + 1]->oper_mach_i = v + 1;
 	machine_oper_num[sol_index][mach_v] += 1;
 
-	for (int i = u; i < machine_oper_num[sol_index][mach_u]; i++)
+	for (int i = u; i <= machine_oper_num[sol_index][mach_u]; i++)
 	{
 		machine[sol_index][mach_u][i] = machine[sol_index][mach_u][i + 1];
 		machine[sol_index][mach_u][i]->oper_mach_i = i;
@@ -1142,28 +1146,28 @@ void Solver::replace_solution(int dest, int src)
 		memcpy(crit_block[dest][block_i], crit_block[src][block_i], 3 * sizeof(int));
 	makespan[dest] = makespan[src];
 }
-void Solver::tabu_search(int sol_index)
+void Solver::tabu_search()
 {
-	int best_sol = 2, cur_sol = sol_index;
+	int sol_cur = 1, sol_best = 2;
 	start_time = clock();
 	global_iteration = 0;
-	init_solution(best_sol);
-	calculate_q_crit_block(best_sol);
+	init_solution(sol_best);
+	calculate_q_crit_block(sol_best);
 
-	//check_solution(best_sol);
-	//check_solution(cur_sol);
+	//check_solution(sol_best);
+	//check_solution(sol_cur);
 
 	for (int cur_iter = 1; cur_iter <= ts_restart; cur_iter++)
 	{
-		replace_solution(cur_sol, best_sol);
-		calculate_q_crit_block(cur_sol);
-		insert_move(cur_sol, best_sol);
-		clear_tabu_list(cur_sol);
+		replace_solution(sol_cur, sol_best);
+		calculate_q_crit_block(sol_cur);
+		insert_move(sol_cur, sol_best);
+		clear_tabu_list(sol_cur);
 		cout << cur_iter << " **********************************" << endl;
 	}
 	end_time = clock();
 	cout << global_iteration << "\t"
-		<< makespan[sol_index] << "\t" << best_known_makespan << "\t"
+		<< makespan[sol_cur] << "\t" << makespan[sol_best] << "\t" << best_known_makespan << "\t"
 		<< (end_time - start_time) / CLOCKS_PER_SEC
 		<< endl;
 }
@@ -1390,7 +1394,7 @@ void Solver::calculate_r(int sol_index)
 int main(int argc, char **argv)
 {
 	int rs = time(NULL);
-	rs = 1500550915;//1499650432 *1500017660*
+	rs = 1500863397;//1499650432 *1500017660*
 	srand(rs);
 	char *argv_win[] = { "",	// 0
 		"_ifp", "instances\\Dauzere_Data\\",	// instances\\Dauzere_Data\\ | instances\\DemirkolBenchmarksJobShop\\ 
@@ -1400,7 +1404,7 @@ int main(int argc, char **argv)
 		//"_ifn", "rcmax_40_20_2", "_suffix",".txt", "_best_obj","4691",
 		"_sfn","dmu15_rcmax_30_15_1pb_3384",	// solution file name 
 		"_sol_num", "6", "_tt0","2", "_d1","5", "_d2", "12",	// 01a (2505) rcmax_30_15_1(3343) rcmax_50_20_2(5621) rcmax_40_20_2(4691 ) rcmax_30_15_9(3430) rcmax_20_15_8(2669)
-		"_itr","12500","_ts_rs","100"
+		"_itr","12500","_ts_rs","1000"
 	};
 	cout << "This is the flexible job shop scheduling problem" << endl;
 #ifdef _WIN32
@@ -1423,7 +1427,7 @@ int main(int argc, char **argv)
 	//solver->init_solution1(1);
 	//solver->ts(10000);
 
-	solver->tabu_search(1);
+	solver->tabu_search();
 #ifdef _WIN32
 	system("pause");
 #endif
