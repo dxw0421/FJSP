@@ -1250,7 +1250,7 @@ void Solver::tabu_search()
 				assignment_iteration += 1;
 				int r1 = MAX((makespan[sol_cur] - best_known_makespan) / d1, d2);	// optimize by making it global
 				assignment_tabu_list[sol_cur][machine[sol_cur][min_mach_u_a][min_u_a]->job_i][machine[sol_cur][min_mach_u_a][min_u_a]->oper_job_i][min_mach_v_a] =
-					assignment_iteration + 10 + rand() % 10;
+					assignment_iteration + 10 + rand() % r1;
 				apply_assign_move(sol_cur, min_mach_u_a, min_u_a, min_mach_v_a, min_v_a);
 				calculate_r(sol_cur);
 				calculate_q_crit_block(sol_cur);
@@ -1520,12 +1520,12 @@ int main(int argc, char **argv)
 	//rs =  1500955339;//1499650432 *1500966325*
 	srand(rs);
 	char *argv_win[] = { "",	// 0
-		//"_ifp", "instances\\Dauzere_Data\\",	// instances\\Dauzere_Data\\ | instances\\DemirkolBenchmarksJobShop\\ 
-		"_ifp", "instances\\Barnes\\",
+		"_ifp", "instances\\Dauzere_Data\\",	// instances\\Dauzere_Data\\ | instances\\DemirkolBenchmarksJobShop\\ 
+		//"_ifp", "instances\\Barnes\\",
 		//"_ifp", "instances\\DemirkolBenchmarksJobShop\\",
 		"_sfp","solutions\\best_solutions\\",	// solution file path
-		//"_ifn", "01a",	"_suffix",".fjs", "_best_obj","2505",	// 01a, .fjs | cscmax_20_15_1 .txt 
-		"_ifn", "mt10x",	"_suffix",".fjs", "_best_obj","918",
+		"_ifn", "01a",	"_suffix",".fjs", "_best_obj","2505",	// 01a, .fjs | cscmax_20_15_1 .txt 
+		//"_ifn", "mt10x",	"_suffix",".fjs", "_best_obj","918",
 		//"_ifn", "rcmax_40_20_2", "_suffix",".txt", "_best_obj","4691",
 		"_sfn","dmu15_rcmax_30_15_1pb_3384",	// solution file name 
 		"_sol_num", "6", "_tt0","2", "_d1","5", "_d2", "12",	// 01a (2505) rcmax_30_15_1(3343) rcmax_50_20_2(5621) rcmax_40_20_2(4691 ) rcmax_30_15_9(3430) rcmax_20_15_8(2669)
