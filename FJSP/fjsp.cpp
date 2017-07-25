@@ -1022,8 +1022,8 @@ void Solver::change_machine(int sol_cur, int sol_best,int &min_u,int &min_mach_u
 			int oper_job_i = machine[sol_cur][mach_u][u]->oper_job_i;
 			if (instance->job_vec[job_i]->oper_vec[oper_job_i]->num_mach == 1)
 				continue;
-			/*if (global_iteration == 450226)
-			cout << "job_i: " << job_i << ", oper_job_i: " << oper_job_i
+			/*if (global_iteration == 1151184)
+				cout << "job_i: " << job_i << ", oper_job_i: " << oper_job_i
 				<< " mach_i: " << mach_u << ", oper_mach_i: " << u << " | ";*/
 			
 			for (int proc_i = 1; proc_i <= instance->job_vec[job_i]->oper_vec[oper_job_i]->num_mach; proc_i++)	// for each process
@@ -1045,25 +1045,27 @@ void Solver::change_machine(int sol_cur, int sol_best,int &min_u,int &min_mach_u
 				for (int m_i = 1; m_i <= machine_oper_num[sol_cur][mach_v]; m_i++)	// determine left_i
 				{
 					Solution::Operation *oper_v = machine[sol_cur][mach_v][m_i];	// move u after v
-					if (oper_v->q+oper_v->t > oper_u->q)
+					if (oper_v->q + oper_v->t > oper_u->q)
 						//if (oper_u->next_job_oper->q >= v->q + v->t)
 					{
 						left_i = m_i;
-						break;
+						//break;
 					}
 				}
-				/*if (global_iteration == 450226)
-				cout << mach_v << "," << left_i << "," << right_i << endl;*/
+				/*if (global_iteration == 1151184)
+					cout << mach_v << "," << left_i << "," << right_i << endl;*/
 				/*if (left_i < right_i)
 					left_i -= 1;
-				else */if (left_i > right_i)
+				else */
+				if (left_i > right_i)
 				{
 					int temp = left_i;
 					left_i = right_i;
 					right_i = temp;
 					//left_i -= 1;
 				}
-
+				if (left_i > 0)
+					left_i -= 1;
 				int v_t = instance->job_vec[job_i]->oper_vec[oper_job_i]->proc_vec[proc_i]->t;
 
 				for (int v = left_i; v < right_i; v++)	// for each feasible position
@@ -1094,12 +1096,12 @@ void Solver::change_machine(int sol_cur, int sol_best,int &min_u,int &min_mach_u
 							min_mach_v = mach_v;
 						}
 					}
-					/*if (global_iteration == 450226)
-					cout << v << ", " << mkspan << "\t";*/
+					/*if (global_iteration == 1151184)
+						cout << v << ", " << mkspan << "\t";*/
 				}
 			}
-			/*if (global_iteration == 450226)
-			cout << endl;*/
+			/*if (global_iteration == 1151184)
+				cout << endl;*/
 		}
 	}
 	/*cout << ns_cnt << endl;*/
@@ -1250,7 +1252,7 @@ void Solver::tabu_search()
 				assignment_iteration += 1;
 				int r1 = MAX((makespan[sol_cur] - best_known_makespan) / d1, d2);	// optimize by making it global
 				assignment_tabu_list[sol_cur][machine[sol_cur][min_mach_u_a][min_u_a]->job_i][machine[sol_cur][min_mach_u_a][min_u_a]->oper_job_i][min_mach_v_a] =
-					assignment_iteration + 10 + rand() % r1;
+					assignment_iteration + 5 + rand() % 10;
 				apply_assign_move(sol_cur, min_mach_u_a, min_u_a, min_mach_v_a, min_v_a);
 				calculate_r(sol_cur);
 				calculate_q_crit_block(sol_cur);
@@ -1517,7 +1519,7 @@ void Solver::calculate_r(int sol_index)
 int main(int argc, char **argv)
 {
 	int rs = time(NULL);
-	//rs =  1500955339;//1499650432 *1500966325*
+	//rs =  1500984430;//1499650432 *1500966325*
 	srand(rs);
 	char *argv_win[] = { "",	// 0
 		"_ifp", "instances\\Dauzere_Data\\",	// instances\\Dauzere_Data\\ | instances\\DemirkolBenchmarksJobShop\\ 
