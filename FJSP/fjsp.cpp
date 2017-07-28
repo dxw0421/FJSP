@@ -182,6 +182,8 @@ Instance::Instance(string _file_input) :file_input(_file_input), total_num_opera
 		while (getline(ifs, str_line))
 		{
 			//cout << str_line << endl;
+			if(str_line=="")
+				continue;
 			split_generic<string>(fields_vec, str_line, " \t");
 			JobInfo *jobinfo = new JobInfo();
 			jobinfo->oper_vec.push_back(NULL);	// the first element in oper_vec is NULL
@@ -1242,7 +1244,7 @@ void Solver::tabu_search()
 			perturb(sol_cur, sol_best, 10, 0);
 		}*/
 		replace_solution(sol_cur, sol_best);
-		perturb(sol_cur, sol_best, 10, 0);
+		perturb(sol_cur, sol_best, 5, 0);
 		
 		for (int local_iter = 1; local_iter <= ts_iteraion; local_iter++)
 		{
@@ -1292,7 +1294,7 @@ void Solver::tabu_search()
 			}
 			else if (min_makespan_p == min_makespan_a&&min_makespan_a == INT_MAX)
 			{
-				perturb(sol_cur, sol_best, 4, 0);
+				perturb(sol_cur, sol_best, 2, 0);
 				//if (min_g_makespan_p < min_g_makespan_a)
 				//{
 				//	permutation_iteration += 1;
@@ -1676,15 +1678,15 @@ int main(int argc, char **argv)
 	srand(rs);
 	char *argv_win[] = { "",	// 0
 		//"_ifp", "instances\\Dauzere_Data\\",	// instances\\Dauzere_Data\\ | instances\\DemirkolBenchmarksJobShop\\ 
-		"_ifp", "instances\\Barnes\\",
+		"_ifp", "instances\\Brandimarte_Data\\",	//Brandimarte_Data  Barnes
 		//"_ifp", "instances\\DemirkolBenchmarksJobShop\\",
 		"_sfp","solutions\\best_solutions\\",	// solution file path
-		//"_ifn", "02a",	"_suffix",".fjs", "_best_obj","2228",	// 01a, .fjs | cscmax_20_15_1 .txt 
-		"_ifn", "mt10cc",	"_suffix",".fjs", "_best_obj","908",
+		//"_ifn", "seti5xyz",	"_suffix",".fjs", "_best_obj","1125",
+		"_ifn", "Mk08",	"_suffix",".fjs", "_best_obj","523",	// 01a, .fjs | cscmax_20_15_1 .txt 
 		//"_ifn", "rcmax_40_20_2", "_suffix",".txt", "_best_obj","4691",
 		"_sfn","dmu15_rcmax_30_15_1pb_3384",	// solution file name 
 		"_sol_num", "6", "_tt0","2", "_d1","5", "_d2", "12",	// 01a (2505) rcmax_30_15_1(3343) rcmax_50_20_2(5621) rcmax_40_20_2(4691 ) rcmax_30_15_9(3430) rcmax_20_15_8(2669)
-						 "_tt1","10", "_d3","5", "_d4", "12",
+						 "_tt1","2", "_d3","5", "_d4", "12",
 		"_itr","20000","_ts_rs","10000"
 	};
 	cout << "This is the flexible job shop scheduling problem. " << rs << endl;
