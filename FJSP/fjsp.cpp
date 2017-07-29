@@ -119,7 +119,7 @@ public:
 	Solution::Operation *queue[MAXN*MAXO];
 	int job_oper_num[MAXS][MAXN], machine_oper_num[MAXS][MAXM];
 	int makespan[MAXS];
-	int critical_flag[MAXN][MAXO];
+	int critical_flag[MAXN][MAXO], critical_flag_g[MAXN][MAXO];
 	int crit_block[MAXS][MAXN*MAXM][3], global_iteration, permutation_iteration, assignment_iteration;
 
 	clock_t start_time, end_time;
@@ -1178,7 +1178,7 @@ void Solver::tabu_search(int sol_cur, int sol_best)
 
 void Solver::ITS()
 {
-	int sol_p1 = 1, sol_p2 = 2, sol_best = 3;
+	int sol_p1 = 1, sol_p2 = 2, sol_best = 3, sol_pr = 4;
 	start_time = clock();
 	global_iteration = permutation_iteration = assignment_iteration = 0;
 	init_solution1(sol_p1);
@@ -1198,6 +1198,8 @@ void Solver::ITS()
 	int a_dis, p_dis;
 	calculate_distance(sol_p1, sol_p2, a_dis, p_dis);
 	cout << a_dis << "\t" << p_dis << endl;
+
+	path_relinking(sol_p1, sol_p2, sol_pr, 0);
 	int no_move_cnt = 0, non_consec_imp = 0;
 	for (int ts_iter = 1; ts_iter <= ts_restart; ts_iter++)
 	{
@@ -1252,34 +1254,85 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 	memset(job_line, 0, sizeof(job_line));
 	memset(machine_line, 0, sizeof(machine_line));
 	replace_solution(sol_pr, sol_s);
+	// find the common operation sequences
+	memset(critical_flag, 0, sizeof(critical_flag));	// for sol_s
+	memset(critical_flag_g, 0, sizeof(critical_flag_g));	// for sol_g
+	for (int mach_s = 1; mach_s <= instance->m; mach_s++)
+	{
+		int consec_cnt = 0;
+		for (int op_s = 1; op_s <= machine_oper_num[sol_s][mach_s]; op_s++)
+		{
+			Solution::Operation *oper_s = machine[sol_s][mach_s][op_s];
+			Solution::Operation *oper_g = job[sol_g][oper_s->job_i][oper_s->oper_job_i];
+			if (oper_g->mach_i != mach_s)
+			{
+				consec_cnt = 0;
+				continue;
+			}
+			if(consec_cnt>=1||	(machine[sol_g][mach_s][oper_g->oper_mach_i + 1]->job_i == machine[sol_s][mach_s][op_s + 1]->job_i&&
+				machine[sol_g][mach_s][oper_g->oper_mach_i + 1]->oper_job_i == machine[sol_s][mach_s][op_s + 1]->oper_job_i&&
+				machine[sol_s][mach_s][op_s + 1] !=dummy_oper[sol_s][END]))
+			{
+				critical_flag[mach_s][op_s] = 1;
+				critical_flag_g[mach_s][oper_g->oper_mach_i] = 1;
+				consec_cnt += 1;
+			}
+			if(machine[sol_g][mach_s][oper_g->oper_mach_i + 1]->job_i != machine[sol_s][mach_s][op_s + 1]->job_i)
+				consec_cnt = 0;
+		}
+	}
+	cout << "common seq:" << endl;
+	for (int mach_s = 1; mach_s <= instance->m; mach_s++)
+	{
+		for (int op_s = 1; op_s <= machine_oper_num[sol_s][mach_s]; op_s++)
+		{
+			Solution::Operation *oper_s = machine[sol_s][mach_s][op_s];
+			if (critical_flag[mach_s][op_s] == 1)
+				cout << oper_s->job_i << "," << oper_s->oper_job_i << "\t";
+			else 
+				cout << "   \t";
+		}
+		cout << endl;
+	}
 
+	cout << "common seq g:" << endl;
+	for (int mach_s = 1; mach_s <= instance->m; mach_s++)
+	{
+		for (int op_s = 1; op_s <= machine_oper_num[sol_g][mach_s]; op_s++)
+		{
+			Solution::Operation *oper_s = machine[sol_g][mach_s][op_s];
+			if (critical_flag_g[mach_s][op_s] == 1)
+				cout << oper_s->job_i << "," << oper_s->oper_job_i << "\t";
+			else
+				cout << "   \t";
+		}
+		cout << endl;
+	}
 	for (int arrange_cnt = 1; arrange_cnt <= instance->total_num_operation; arrange_cnt++)
 	{
-		int rand_job=rand()%
-	}
-	
-	for (int arrange_cnt = 1; arrange_cnt <= instance->total_num_operation; arrange_cnt++)
-	{
-		int rand_job = rand() % instance->n + 1;
-		while (job_line[rand_job] + 1 > instance->job_vec[rand_job]->num_oper)
-			rand_job = rand() % instance->n + 1;
-		job_line[rand_job] += 1;
-		int rand_proc = rand() % instance->job_vec[rand_job]->oper_vec[job_line[rand_job]]->num_mach + 1;
-		int rand_machine = instance->job_vec[rand_job]->oper_vec[job_line[rand_job]]->proc_vec[rand_proc]->mach_i;
-		machine_oper_num[sol_index][rand_machine] += 1;
-		machine[sol_index][rand_machine][machine_oper_num[sol_index][rand_machine]] = job[sol_index][rand_job][job_line[rand_job]];
-		machine[sol_index][rand_machine][machine_oper_num[sol_index][rand_machine]]->mach_i = rand_machine;
-		machine[sol_index][rand_machine][machine_oper_num[sol_index][rand_machine]]->oper_mach_i = machine_oper_num[sol_index][rand_machine];
-		machine[sol_index][rand_machine][machine_oper_num[sol_index][rand_machine]]->t = instance->job_vec[rand_job]->oper_vec[job_line[rand_job]]->proc_vec[rand_proc]->t;
-	}
-	for (int mach_i = 1; mach_i <= instance->m; mach_i++)
-	{
-		machine[sol_index][mach_i][0] = dummy_oper[sol_index][START];
-		machine[sol_index][mach_i][machine_oper_num[sol_index][mach_i] + 1] = dummy_oper[sol_index][END];
-	}
-	calculate_r(sol_index);
-	calculate_q_crit_block(sol_index);
-	
+		int rand_mach = rand() % instance->m + 1;
+		while(machine_line[rand_mach]+1>machine_oper_num[sol_pr][rand_mach])
+			rand_mach = rand() % instance->m + 1;
+		machine_line[rand_mach] += 1;
+		Solution::Operation *oper_pr = machine[sol_pr][rand_mach][machine_line[rand_mach]];
+		Solution::Operation *oper_g = machine[sol_g][rand_mach][machine_line[rand_mach]];
+		if (oper_pr->job_i == oper_g->job_i&&oper_pr->oper_job_i == oper_g->oper_job_i)
+			continue;
+		Solution::Operation *oper_u = job[sol_pr][oper_g->job_i][oper_g->oper_job_i];
+		if (oper_u->mach_i != rand_mach)	// change machine
+		{
+			if (oper_pr->end_time > oper_u->pre_job_oper->end_time&&	// oper_u can move before oper_s
+				machine[sol_pr][rand_mach][machine_line[rand_mach] - 1]->q + machine[sol_pr][rand_mach][machine_line[rand_mach] - 1]->t > oper_u->q)	// oper_u can move after previous machine oper of oper_s
+				apply_assign_move(sol_pr, oper_u->mach_i, oper_u->oper_job_i, rand_mach, machine_line[rand_mach]);
+			else
+				cout << endl;
+		}
+		else
+		{	// change permutation, move oper_u before oper_s
+			if (oper_pr->end_time > oper_u->pre_job_oper->start_time)
+				apply_permutation_move(sol_pr, rand_mach, machine_line[rand_mach], oper_u->oper_mach_i, FORWARD_INSERT);
+		}
+	}	
 }
 void Solver::perturb(int sol_index, int sol_index_best, int ptr_len, int ptr_type)
 {
