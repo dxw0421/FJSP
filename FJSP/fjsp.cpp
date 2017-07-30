@@ -134,6 +134,8 @@ public:
 	Tabu *permutation_tabu_list[MAXS][MAXM];
 	int assignment_tabu_list[MAXS][MAXN][MAXO][MAXM];	// sol_index, job_i, job_oper_i, assigned mach_i
 
+	int common_seq[2][MAXM][2 * MAXO];	// in path relinking
+
 	int tt0, d1, d2, tt1, d3, d4;	// for tabu tenure
 	int best_known_makespan, ts_iteraion, ts_restart;
 	int big_ptr, big_ptr_type, small_ptr, small_ptr_type;
@@ -1253,86 +1255,196 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 	int machine_line[MAXM];
 	memset(job_line, 0, sizeof(job_line));
 	memset(machine_line, 0, sizeof(machine_line));
+	memset(common_seq, 0, sizeof(common_seq));
 	replace_solution(sol_pr, sol_s);
 	// find the common operation sequences
-	memset(critical_flag, 0, sizeof(critical_flag));	// for sol_s
-	memset(critical_flag_g, 0, sizeof(critical_flag_g));	// for sol_g
 	for (int mach_s = 1; mach_s <= instance->m; mach_s++)
 	{
-		int consec_cnt = 0;
-		for (int op_s = 1; op_s <= machine_oper_num[sol_s][mach_s]; op_s++)
+		int consec_cnt = 0, seq_cnt = 0;
+		for (int op_s = 1, op_g =1; op_s <= machine_oper_num[sol_s][mach_s]&& op_g <= machine_oper_num[sol_g][mach_s];)
 		{
 			Solution::Operation *oper_s = machine[sol_s][mach_s][op_s];
 			Solution::Operation *oper_g = job[sol_g][oper_s->job_i][oper_s->oper_job_i];
-			if (oper_g->mach_i != mach_s)
+			if (oper_g->mach_i != mach_s||oper_g->oper_mach_i<op_g)
 			{
 				consec_cnt = 0;
+				op_s += 1;
 				continue;
 			}
-			if(consec_cnt>=1||	(machine[sol_g][mach_s][oper_g->oper_mach_i + 1]->job_i == machine[sol_s][mach_s][op_s + 1]->job_i&&
-				machine[sol_g][mach_s][oper_g->oper_mach_i + 1]->oper_job_i == machine[sol_s][mach_s][op_s + 1]->oper_job_i&&
-				machine[sol_s][mach_s][op_s + 1] !=dummy_oper[sol_s][END]))
+			op_g = oper_g->oper_mach_i;
+
+			common_seq[sol_s][mach_s][seq_cnt * 2 + 1] = op_s;
+			common_seq[sol_g][mach_s][seq_cnt * 2 + 1] = op_g;
+			
+			consec_cnt += 1;
+			op_s += 1;
+			op_g += 1;
+			while (machine[sol_g][mach_s][op_g]->job_i == machine[sol_s][mach_s][op_s]->job_i&&
+				machine[sol_g][mach_s][op_g]->oper_job_i == machine[sol_s][mach_s][op_s]->oper_job_i&&
+				machine[sol_g][mach_s][op_g] != dummy_oper[sol_g][END]&& machine[sol_s][mach_s][op_s] != dummy_oper[sol_s][END])
 			{
-				critical_flag[mach_s][op_s] = 1;
-				critical_flag_g[mach_s][oper_g->oper_mach_i] = 1;
 				consec_cnt += 1;
+				op_s += 1;
+				op_g += 1;
 			}
-			if(machine[sol_g][mach_s][oper_g->oper_mach_i + 1]->job_i != machine[sol_s][mach_s][op_s + 1]->job_i)
-				consec_cnt = 0;
+			if (consec_cnt == 1)
+			{
+				if (seq_cnt > 0)
+					op_g = common_seq[sol_g][mach_s][(seq_cnt - 1) * 2 + 2] + 1;	// previous seq of g
+				else
+					op_g = 1;
+			}
+			else
+			{
+				common_seq[sol_s][mach_s][seq_cnt * 2 + 2] = op_s - 1;
+				common_seq[sol_g][mach_s][seq_cnt * 2 + 2] = op_g - 1;
+				seq_cnt += 1;
+				op_g -= 1;
+			}
+			consec_cnt = 0;
 		}
+		common_seq[sol_s][mach_s][0] = common_seq[sol_g][mach_s][0] = seq_cnt;
 	}
 	cout << "common seq:" << endl;
-	for (int mach_s = 1; mach_s <= instance->m; mach_s++)
+	for (int mach_i = 1; mach_i <= instance->m; mach_i++)
 	{
-		for (int op_s = 1; op_s <= machine_oper_num[sol_s][mach_s]; op_s++)
+		for (int seq_i = 1; seq_i <= common_seq[sol_s][mach_i][0]; seq_i++)
 		{
-			Solution::Operation *oper_s = machine[sol_s][mach_s][op_s];
-			if (critical_flag[mach_s][op_s] == 1)
-				cout << oper_s->job_i << "," << oper_s->oper_job_i << "\t";
-			else 
-				cout << "   \t";
+			for (int op_i = common_seq[sol_s][mach_i][(seq_i - 1) * 2 + 1]; op_i <= common_seq[sol_s][mach_i][(seq_i - 1) * 2 + 2]; op_i++)
+			{
+				Solution::Operation *oper = machine[sol_s][mach_i][op_i];
+				cout << oper->job_i << "," << oper->oper_job_i << "\t";
+			}
+			cout << " | ";
 		}
-		cout << endl;
+		cout << endl << endl;
 	}
 
 	cout << "common seq g:" << endl;
-	for (int mach_s = 1; mach_s <= instance->m; mach_s++)
+	for (int mach_i = 1; mach_i <= instance->m; mach_i++)
 	{
-		for (int op_s = 1; op_s <= machine_oper_num[sol_g][mach_s]; op_s++)
+		for (int seq_i = 1; seq_i <= common_seq[sol_g][mach_i][0]; seq_i++)
 		{
-			Solution::Operation *oper_s = machine[sol_g][mach_s][op_s];
-			if (critical_flag_g[mach_s][op_s] == 1)
-				cout << oper_s->job_i << "," << oper_s->oper_job_i << "\t";
-			else
-				cout << "   \t";
+			for (int op_i = common_seq[sol_g][mach_i][(seq_i - 1) * 2 + 1]; op_i <= common_seq[sol_g][mach_i][(seq_i - 1) * 2 + 2]; op_i++)
+			{
+				Solution::Operation *oper = machine[sol_g][mach_i][op_i];
+				cout << oper->job_i << "," << oper->oper_job_i << "\t";
+			}
+			cout << " | ";
 		}
-		cout << endl;
+		cout << endl << endl;
 	}
-	for (int arrange_cnt = 1; arrange_cnt <= instance->total_num_operation; arrange_cnt++)
+	int total_non_seq = instance->total_num_operation;
+	for (int mach_i = 1; mach_i <= instance->m; mach_i++)
+		for (int seq_i = 1; seq_i <= common_seq[sol_g][mach_i][0]; seq_i++)
+			total_non_seq -= (common_seq[sol_g][mach_i][(seq_i - 1) * 2 + 2] - common_seq[sol_g][mach_i][(seq_i - 1) * 2 + 1]);
+
+	for (int i = 1; i <= total_non_seq; i++)
 	{
-		int rand_mach = rand() % instance->m + 1;
-		while(machine_line[rand_mach]+1>machine_oper_num[sol_pr][rand_mach])
-			rand_mach = rand() % instance->m + 1;
-		machine_line[rand_mach] += 1;
-		Solution::Operation *oper_pr = machine[sol_pr][rand_mach][machine_line[rand_mach]];
-		Solution::Operation *oper_g = machine[sol_g][rand_mach][machine_line[rand_mach]];
-		if (oper_pr->job_i == oper_g->job_i&&oper_pr->oper_job_i == oper_g->oper_job_i)
-			continue;
-		Solution::Operation *oper_u = job[sol_pr][oper_g->job_i][oper_g->oper_job_i];
-		if (oper_u->mach_i != rand_mach)	// change machine
+		for (int mach_g = 1; mach_g <= instance->m; mach_g++)
 		{
-			if (oper_pr->end_time > oper_u->pre_job_oper->end_time&&	// oper_u can move before oper_s
-				machine[sol_pr][rand_mach][machine_line[rand_mach] - 1]->q + machine[sol_pr][rand_mach][machine_line[rand_mach] - 1]->t > oper_u->q)	// oper_u can move after previous machine oper of oper_s
-				apply_assign_move(sol_pr, oper_u->mach_i, oper_u->oper_job_i, rand_mach, machine_line[rand_mach]);
-			else
-				cout << endl;
+			for (int seq_g = 1; seq_g <= common_seq[sol_g][mach_g][0]; seq_g++)
+			{
+				int op_g = common_seq[sol_g][mach_g][(seq_g - 1) * 2 + 1];
+				if(op_g>1)	// the operation on the left side of the common sequence
+				{
+					Solution::Operation *oper_g = machine[sol_g][mach_g][op_g];
+					Solution::Operation *oper_g_mp = machine[sol_g][mach_g][op_g - 1];
+					Solution::Operation *oper_pr_u = job[sol_pr][oper_g->job_i][oper_g->oper_job_i];	
+					Solution::Operation *oper_pr_v = job[sol_pr][oper_g_mp->job_i][oper_g_mp->oper_job_i];	// move v before u
+					if (oper_pr_v->mach_i == mach_g)	// change permutaion
+					{
+						if (oper_pr_u->oper_mach_i < oper_pr_v->oper_mach_i)	// move v before u
+						{
+							if (oper_pr_u->end_time > oper_pr_v->pre_job_oper->start_time)
+							{
+								MOVE_TYPE move_type = FORWARD_INSERT;
+								int mkspan;
+								try_forward_insert_move(sol_pr, mkspan, mach_g, oper_pr_u->oper_mach_i, oper_pr_v->oper_mach_i);
+								cout << mach_g << "\t" << "LF\t" << oper_pr_u->oper_mach_i << "\t" << oper_pr_v->oper_mach_i << "\t" << mkspan << endl;
+							}
+						}
+						else  // move v after PM[u]
+						{
+							Solution::Operation *oper_pr_u_mp = machine[sol_pr][mach_g][oper_pr_u->oper_mach_i - 1];
+							if (oper_pr_u_mp->q + oper_pr_u_mp->t > oper_pr_v->next_job_oper->q)
+							{
+								MOVE_TYPE move_type = BACKWARD_INSERT;
+								int mkspan;
+								try_backward_insert_move(sol_pr, mkspan, mach_g, oper_pr_v->oper_mach_i, oper_pr_u->oper_mach_i - 1);
+								cout << mach_g << "\t" << "LB\t" << oper_pr_v->oper_mach_i << "\t" << oper_pr_u->oper_mach_i - 1 << "\t" << mkspan << endl;
+							}
+						}
+					}
+					else  // change assignment
+					{
+						// change assignment of v, move v before u and after MP[u]
+						Solution::Operation *oper_pr_u_mp = machine[sol_pr][mach_g][oper_pr_u->oper_mach_i - 1];
+						if (oper_pr_u->end_time > oper_pr_v->pre_job_oper->end_time&&
+							oper_pr_u_mp->q + oper_pr_u_mp->t > oper_pr_v->next_job_oper->q + oper_pr_v->next_job_oper->t)
+						{
+							oper_pr_v->apx_r = MAX(oper_pr_v->pre_job_oper->end_time, oper_pr_u_mp->end_time);
+							oper_pr_v->apx_q = MAX(oper_pr_v->q + oper_pr_v->t, oper_pr_u->q + oper_pr_u->t);
+
+							//int v_t = instance->job_vec[job_i]->oper_vec[oper_job_i]->proc_vec[proc_i]->t;
+							int mkspan = oper_pr_v->apx_r + oper_pr_v->apx_q + oper_g_mp->t;	// here should be oper_g_pm->t
+							cout << mach_g << "\t" << "A\t" << oper_pr_v->oper_mach_i <<"\t"<<mkspan<< endl;
+						}
+					}
+				}
+
+				// the operation on the right side of the common sequence
+				op_g = common_seq[sol_g][mach_g][(seq_g - 1) * 2 + 2];
+				if (op_g<machine_oper_num[sol_g][mach_g])
+				{
+					Solution::Operation *oper_g = machine[sol_g][mach_g][op_g];
+					Solution::Operation *oper_g_ms = machine[sol_g][mach_g][op_g + 1];
+					Solution::Operation *oper_pr_u = job[sol_pr][oper_g->job_i][oper_g->oper_job_i];
+					Solution::Operation *oper_pr_v = job[sol_pr][oper_g_ms->job_i][oper_g_ms->oper_job_i];	// move v before u
+					if (oper_pr_v->mach_i == mach_g)	// change permutaion
+					{
+						if (oper_pr_u->oper_mach_i > oper_pr_v->oper_mach_i)	// move v before MS[u]
+						{
+							Solution::Operation *oper_pr_u_ms = machine[sol_pr][mach_g][oper_pr_u->oper_mach_i + 1];
+							if (oper_pr_u_ms->end_time > oper_pr_v->pre_job_oper->start_time)
+							{
+								MOVE_TYPE move_type = FORWARD_INSERT;
+								int mkspan;
+								try_forward_insert_move(sol_pr, mkspan, mach_g, oper_pr_u->oper_mach_i, oper_pr_v->oper_mach_i);
+								cout << mach_g << "\t" << "RF\t" << oper_pr_u->oper_mach_i << "\t" << oper_pr_v->oper_mach_i << "\t" << mkspan << endl;
+							}
+						}
+						else  // move v after u
+						{
+							if (oper_pr_u->q + oper_pr_u->t > oper_pr_v->next_job_oper->q)
+							{
+								MOVE_TYPE move_type = BACKWARD_INSERT;
+								int mkspan;
+								try_backward_insert_move(sol_pr, mkspan, mach_g, oper_pr_v->oper_mach_i, oper_pr_u->oper_mach_i - 1);
+								cout << mach_g << "\t" << "RB\t" << oper_pr_v->oper_mach_i << "\t" << oper_pr_u->oper_mach_i - 1 << "\t" << mkspan << endl;
+							}
+						}
+					}
+					else  // change assignment
+					{
+						// change assignment of v, move v after u and before MS[u]
+						Solution::Operation *oper_pr_u_ms = machine[sol_pr][mach_g][oper_pr_u->oper_mach_i - 1];
+						if (oper_pr_u_ms->end_time > oper_pr_v->pre_job_oper->end_time&&
+							oper_pr_u->q + oper_pr_u->t > oper_pr_v->next_job_oper->q + oper_pr_v->next_job_oper->t)
+						{
+							oper_pr_v->apx_r = MAX(oper_pr_v->pre_job_oper->end_time, oper_pr_u->end_time);
+							oper_pr_v->apx_q = MAX(oper_pr_v->q + oper_pr_v->t, oper_pr_u_ms->q + oper_pr_u_ms->t);
+
+							//int v_t = instance->job_vec[job_i]->oper_vec[oper_job_i]->proc_vec[proc_i]->t;
+							int mkspan = oper_pr_v->apx_r + oper_pr_v->apx_q + oper_g_ms->t;	// here should be oper_g_pm->t
+							cout << mach_g << "\t" << "A\t" << oper_pr_v->oper_mach_i<<"\t" << mkspan << endl;
+
+						}
+					}
+				}
+			}
 		}
-		else
-		{	// change permutation, move oper_u before oper_s
-			if (oper_pr->end_time > oper_u->pre_job_oper->start_time)
-				apply_permutation_move(sol_pr, rand_mach, machine_line[rand_mach], oper_u->oper_mach_i, FORWARD_INSERT);
-		}
-	}	
+	}
 }
 void Solver::perturb(int sol_index, int sol_index_best, int ptr_len, int ptr_type)
 {
