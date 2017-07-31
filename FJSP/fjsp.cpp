@@ -1645,6 +1645,8 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 		}	// end of common seq of all machines
 		if (min_makespan != INT_MAX)
 		{
+			/*if (diff_cnt == 74)
+				display_solution(sol_pr);*/
 			if (min_is_p)
 			{
 				apply_permutation_move(sol_pr, min_mach_u, min_u, min_v, min_move_type);
@@ -1656,13 +1658,15 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 				apply_assign_move(sol_pr, min_mach_u, min_u, min_mach_v, min_v);
 				cout << min_mach_u << "\t" << min_u << "\t" << min_mach_v << "\t" << min_v << endl;
 			}
+			/*if (diff_cnt == 74)
+				display_solution(sol_pr);*/
 			calculate_r(sol_pr);
 			calculate_q_crit_block(sol_pr);
 			check_solution(sol_pr);
 			int a_dis, p_dis;
 			calculate_distance(sol_pr, sol_g, a_dis, p_dis);
 			cout << a_dis << "\t" << p_dis << endl;
-			//display_solution(sol_pr);
+
 			if (is_left_side)
 			{
 				common_seq[com_g][min_mach_g][(min_seq_g - 1) * 2 + 1] -= 1;
@@ -1880,7 +1884,7 @@ void Solver::calculate_r(int sol_index)
 	}
 	if (oper_num != instance->total_num_operation)
 	{
-		cout << "ERROR: the number of operations is wrong" << endl;
+		cout << "ERROR: the number of operations is wrong pr1" << endl;
 		system("pause");
 	}
 	oper_num = 0;
@@ -1902,7 +1906,7 @@ void Solver::calculate_r(int sol_index)
 	cout << endl;*/
 	if (oper_num != instance->total_num_operation)
 	{
-		cout << "ERROR: the number of operations is wrong" << endl;
+		cout << "ERROR: the number of operations is wrong pr2" << endl;
 		system("pause");
 	}
 	makespan[sol_index] = 0;
