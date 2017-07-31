@@ -1374,7 +1374,7 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 							{
 								move_type = FORWARD_INSERT;
 								try_forward_insert_move(sol_pr, mkspan, mach_g, oper_pr_u->oper_mach_i, oper_pr_v->oper_mach_i);
-								cout << mach_g << "\t" << "LF\t" << oper_pr_u->oper_mach_i << "\t" << oper_pr_v->oper_mach_i << "\t" << mkspan << endl;
+								//cout << mach_g << "\t" << "LF\t" << oper_pr_u->oper_mach_i << "\t" << oper_pr_v->oper_mach_i << "\t" << mkspan << endl;
 								if (min_makespan > mkspan)
 								{
 									min_makespan = mkspan;
@@ -1415,7 +1415,7 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 							{
 								move_type = BACKWARD_INSERT;
 								try_backward_insert_move(sol_pr, mkspan, mach_g, oper_pr_v->oper_mach_i, oper_pr_u->oper_mach_i - 1);
-								cout << mach_g << "\t" << "LB\t" << oper_pr_v->oper_mach_i << "\t" << oper_pr_u->oper_mach_i - 1 << "\t" << mkspan << endl;
+								//cout << mach_g << "\t" << "LB\t" << oper_pr_v->oper_mach_i << "\t" << oper_pr_u->oper_mach_i - 1 << "\t" << mkspan << endl;
 								if (min_makespan > mkspan)
 								{
 									min_makespan = mkspan;
@@ -1462,7 +1462,7 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 
 							//int v_t = instance->job_vec[job_i]->oper_vec[oper_job_i]->proc_vec[proc_i]->t;
 							mkspan = oper_pr_v->apx_r + oper_pr_v->apx_q + oper_g_mp->t;	// here should be oper_g_mp->t
-							cout << mach_g << "\t" << "LA\t" << oper_pr_u_mp->oper_mach_i << "\t" << oper_pr_v->oper_mach_i << "\t" << mkspan << endl;
+							//cout << mach_g << "\t" << "LA\t" << oper_pr_u_mp->oper_mach_i << "\t" << oper_pr_v->oper_mach_i << "\t" << mkspan << endl;
 							if (min_makespan > mkspan)
 							{
 								min_makespan = mkspan;
@@ -1516,8 +1516,8 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 							{
 								move_type = FORWARD_INSERT;
 								try_forward_insert_move(sol_pr, mkspan, mach_g, oper_pr_u->oper_mach_i + 1, oper_pr_v->oper_mach_i);
-								cout << mach_g << "\t" << "RF\t" << oper_pr_u->oper_mach_i + 1 << "\t" << oper_pr_v->oper_mach_i << "\t" << mkspan << "\t"
-									<< op_g << endl;
+								/*cout << mach_g << "\t" << "RF\t" << oper_pr_u->oper_mach_i + 1 << "\t" << oper_pr_v->oper_mach_i << "\t" << mkspan << "\t"
+									<< op_g << endl;*/
 								if (min_makespan > mkspan)
 								{
 									min_makespan = mkspan;
@@ -1558,7 +1558,7 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 							{
 								move_type = BACKWARD_INSERT;
 								try_backward_insert_move(sol_pr, mkspan, mach_g, oper_pr_v->oper_mach_i, oper_pr_u->oper_mach_i);
-								cout << mach_g << "\t" << "RB\t" << oper_pr_v->oper_mach_i << "\t" << oper_pr_u->oper_mach_i << "\t" << mkspan << endl;
+								//cout << mach_g << "\t" << "RB\t" << oper_pr_v->oper_mach_i << "\t" << oper_pr_u->oper_mach_i << "\t" << mkspan << endl;
 								if (min_makespan > mkspan)
 								{
 									min_makespan = mkspan;
@@ -1605,7 +1605,7 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 
 							//int v_t = instance->job_vec[job_i]->oper_vec[oper_job_i]->proc_vec[proc_i]->t;
 							mkspan = oper_pr_v->apx_r + oper_pr_v->apx_q + oper_g_ms->t;	// here should be oper_g_pm->t
-							cout << mach_g << "\t" << "RA\t" << oper_pr_u->oper_mach_i << "\t" << oper_pr_v->oper_mach_i << "\t" << mkspan << endl;
+							//cout << mach_g << "\t" << "RA\t" << oper_pr_u->oper_mach_i << "\t" << oper_pr_v->oper_mach_i << "\t" << mkspan << endl;
 							if (min_makespan > mkspan)
 							{
 								min_makespan = mkspan;
@@ -1646,25 +1646,50 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 		if (min_makespan != INT_MAX)
 		{
 			if (min_is_p)
+			{
 				apply_permutation_move(sol_pr, min_mach_u, min_u, min_v, min_move_type);
+				cout << min_mach_u << "\t" << min_u << "\t" << min_v << "\t"
+					<< (min_move_type == BACKWARD_INSERT ? "B" : "F") << endl;
+			}
 			else
+			{
 				apply_assign_move(sol_pr, min_mach_u, min_u, min_mach_v, min_v);
+				cout << min_mach_u << "\t" << min_u << "\t" << min_mach_v << "\t" << min_v << endl;
+			}
 			calculate_r(sol_pr);
 			calculate_q_crit_block(sol_pr);
 			check_solution(sol_pr);
+			int a_dis, p_dis;
+			calculate_distance(sol_pr, sol_g, a_dis, p_dis);
+			cout << a_dis << "\t" << p_dis << endl;
+			//display_solution(sol_pr);
 			if (is_left_side)
 			{
 				common_seq[com_g][min_mach_g][(min_seq_g - 1) * 2 + 1] -= 1;
+				if (common_flag[min_mach_g][min_op_g - 1] == 1)
+					cout << endl;
 				common_flag[min_mach_g][min_op_g - 1] = 1;
 			}
 			else
 			{
 				common_seq[com_g][min_mach_g][(min_seq_g - 1) * 2 + 2] += 1;
+				if (common_flag[min_mach_g][min_op_g + 1] == 1)
+					cout << endl;
 				common_flag[min_mach_g][min_op_g + 1] = 1;
 			}
 		}
 		else
-			cout << "CAN NOT PASS";
+		{
+			cout << "CAN NOT PASS" << endl;
+			display_solution(sol_pr);
+			//apply_permutation_move(sol_pr, min_mach_u, min_u, min_v, min_move_type);
+			apply_permutation_move(sol_pr, 1, 9, 11, BACKWARD_INSERT);
+			calculate_r(sol_pr);
+			calculate_q_crit_block(sol_pr);
+
+			check_solution(sol_pr);
+			display_solution(sol_pr);
+		}
 		//*****begin of select the best one*****
 	}
 }
