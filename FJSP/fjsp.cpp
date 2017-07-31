@@ -607,7 +607,7 @@ void Solver::try_forward_insert_move(int sol_index, int &makespan, int mach_i, i
 		if (makespan < machine[sol_index][mach_i][oper_i]->apx_r + machine[sol_index][mach_i][oper_i]->apx_q + machine[sol_index][mach_i][oper_i]->t)
 			makespan = machine[sol_index][mach_i][oper_i]->apx_r + machine[sol_index][mach_i][oper_i]->apx_q + machine[sol_index][mach_i][oper_i]->t;
 }
-// calculate start and end time, makespan, last operation at makespan machine
+// u is less than v, move u after v, or move v before u
 void Solver::apply_permutation_move(int sol_index, int mach_i, int u, int v, MOVE_TYPE move_type)
 {
 	if (move_type == BACKWARD_INSERT)
@@ -1063,6 +1063,7 @@ void Solver::change_machine(int sol_cur, int sol_best, int &min_u, int &min_mach
 	/*if (makespan[sol_best] <= 2515)
 	cout << ns_cnt << endl;*/
 }
+// move u of mach_u after v of mach_v
 void Solver::apply_assign_move(int sol_index, int mach_u, int u, int mach_v, int v)
 {
 	for (int i = machine_oper_num[sol_index][mach_v] + 1; i > v; i--)
@@ -1251,11 +1252,8 @@ void Solver::calculate_distance(int sol_a, int sol_b, int &a_dis, int &p_dis)
 }
 void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 {
-	int job_line[MAXN];
-	int machine_line[MAXM];
-	memset(job_line, 0, sizeof(job_line));
-	memset(machine_line, 0, sizeof(machine_line));
 	memset(common_seq, 0, sizeof(common_seq));
+	int com_s = 0, com_g = 1;
 	replace_solution(sol_pr, sol_s);
 	// find the common operation sequences
 	for (int mach_s = 1; mach_s <= instance->m; mach_s++)
@@ -1273,8 +1271,8 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 			}
 			op_g = oper_g->oper_mach_i;
 
-			common_seq[sol_s][mach_s][seq_cnt * 2 + 1] = op_s;
-			common_seq[sol_g][mach_s][seq_cnt * 2 + 1] = op_g;
+			common_seq[com_s][mach_s][seq_cnt * 2 + 1] = op_s;
+			common_seq[com_g][mach_s][seq_cnt * 2 + 1] = op_g;
 			
 			consec_cnt += 1;
 			op_s += 1;
@@ -1290,27 +1288,27 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 			if (consec_cnt == 1)
 			{
 				if (seq_cnt > 0)
-					op_g = common_seq[sol_g][mach_s][(seq_cnt - 1) * 2 + 2] + 1;	// previous seq of g
+					op_g = common_seq[com_g][mach_s][(seq_cnt - 1) * 2 + 2] + 1;	// previous seq of g
 				else
 					op_g = 1;
 			}
 			else
 			{
-				common_seq[sol_s][mach_s][seq_cnt * 2 + 2] = op_s - 1;
-				common_seq[sol_g][mach_s][seq_cnt * 2 + 2] = op_g - 1;
+				common_seq[com_s][mach_s][seq_cnt * 2 + 2] = op_s - 1;
+				common_seq[com_g][mach_s][seq_cnt * 2 + 2] = op_g - 1;
 				seq_cnt += 1;
 				op_g -= 1;
 			}
 			consec_cnt = 0;
 		}
-		common_seq[sol_s][mach_s][0] = common_seq[sol_g][mach_s][0] = seq_cnt;
+		common_seq[com_s][mach_s][0] = common_seq[com_g][mach_s][0] = seq_cnt;
 	}
 	cout << "common seq:" << endl;
 	for (int mach_i = 1; mach_i <= instance->m; mach_i++)
 	{
-		for (int seq_i = 1; seq_i <= common_seq[sol_s][mach_i][0]; seq_i++)
+		for (int seq_i = 1; seq_i <= common_seq[com_s][mach_i][0]; seq_i++)
 		{
-			for (int op_i = common_seq[sol_s][mach_i][(seq_i - 1) * 2 + 1]; op_i <= common_seq[sol_s][mach_i][(seq_i - 1) * 2 + 2]; op_i++)
+			for (int op_i = common_seq[com_s][mach_i][(seq_i - 1) * 2 + 1]; op_i <= common_seq[com_s][mach_i][(seq_i - 1) * 2 + 2]; op_i++)
 			{
 				Solution::Operation *oper = machine[sol_s][mach_i][op_i];
 				cout << oper->job_i << "," << oper->oper_job_i << "\t";
@@ -1323,9 +1321,9 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 	cout << "common seq g:" << endl;
 	for (int mach_i = 1; mach_i <= instance->m; mach_i++)
 	{
-		for (int seq_i = 1; seq_i <= common_seq[sol_g][mach_i][0]; seq_i++)
+		for (int seq_i = 1; seq_i <= common_seq[com_g][mach_i][0]; seq_i++)
 		{
-			for (int op_i = common_seq[sol_g][mach_i][(seq_i - 1) * 2 + 1]; op_i <= common_seq[sol_g][mach_i][(seq_i - 1) * 2 + 2]; op_i++)
+			for (int op_i = common_seq[com_g][mach_i][(seq_i - 1) * 2 + 1]; op_i <= common_seq[com_g][mach_i][(seq_i - 1) * 2 + 2]; op_i++)
 			{
 				Solution::Operation *oper = machine[sol_g][mach_i][op_i];
 				cout << oper->job_i << "," << oper->oper_job_i << "\t";
@@ -1334,116 +1332,340 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 		}
 		cout << endl << endl;
 	}
+	int common_flag[MAXN][MAXO];
+	memset(common_flag, 0, sizeof(common_flag));
 	int total_non_seq = instance->total_num_operation;
 	for (int mach_i = 1; mach_i <= instance->m; mach_i++)
-		for (int seq_i = 1; seq_i <= common_seq[sol_g][mach_i][0]; seq_i++)
-			total_non_seq -= (common_seq[sol_g][mach_i][(seq_i - 1) * 2 + 2] - common_seq[sol_g][mach_i][(seq_i - 1) * 2 + 1]);
-
-	for (int i = 1; i <= total_non_seq; i++)
 	{
-		for (int mach_g = 1; mach_g <= instance->m; mach_g++)
+		for (int seq_i = 1; seq_i <= common_seq[com_g][mach_i][0]; seq_i++)
 		{
-			for (int seq_g = 1; seq_g <= common_seq[sol_g][mach_g][0]; seq_g++)
+			total_non_seq -= (common_seq[com_g][mach_i][(seq_i - 1) * 2 + 2] - common_seq[com_g][mach_i][(seq_i - 1) * 2 + 1]);
+			for (int op_i = common_seq[com_g][mach_i][(seq_i - 1) * 2 + 1]; op_i <= common_seq[com_g][mach_i][(seq_i - 1) * 2 + 2]; op_i++)
+				common_flag[mach_i][op_i] = 1;
+		}
+	}
+
+	for (int diff_cnt = 1; diff_cnt <= total_non_seq; diff_cnt++)
+	{
+		//*****begin of select the best one*****
+		cout << diff_cnt << "*************" << endl;
+		int min_makespan = INT_MAX, mkspan, min_u, min_v, min_mach_u, min_mach_v, equ_cnt;
+		MOVE_TYPE move_type, min_move_type;
+		bool min_is_p;
+		int min_mach_g, min_op_g, min_seq_g;
+		bool is_left_side;
+		for (int mach_g = 1; mach_g <= instance->m; mach_g++)	// for the common seq of each machine
+		{
+			for (int seq_g = 1; seq_g <= common_seq[com_g][mach_g][0]; seq_g++)	// for each common seq of mach_g
 			{
-				int op_g = common_seq[sol_g][mach_g][(seq_g - 1) * 2 + 1];
-				if(op_g>1)	// the operation on the left side of the common sequence
+				int op_g = common_seq[com_g][mach_g][(seq_g - 1) * 2 + 1];
+				if (op_g > 1 && common_flag[mach_g][op_g - 1] == 0)	// the operation on the left side of the common sequence
 				{
 					Solution::Operation *oper_g = machine[sol_g][mach_g][op_g];
 					Solution::Operation *oper_g_mp = machine[sol_g][mach_g][op_g - 1];
-					Solution::Operation *oper_pr_u = job[sol_pr][oper_g->job_i][oper_g->oper_job_i];	
-					Solution::Operation *oper_pr_v = job[sol_pr][oper_g_mp->job_i][oper_g_mp->oper_job_i];	// move v before u
+					Solution::Operation *oper_pr_u = job[sol_pr][oper_g->job_i][oper_g->oper_job_i];
+					Solution::Operation *oper_pr_v = job[sol_pr][oper_g_mp->job_i][oper_g_mp->oper_job_i];
+					Solution::Operation *oper_pr_u_mp = machine[sol_pr][mach_g][oper_pr_u->oper_mach_i - 1];
 					if (oper_pr_v->mach_i == mach_g)	// change permutaion
 					{
 						if (oper_pr_u->oper_mach_i < oper_pr_v->oper_mach_i)	// move v before u
 						{
 							if (oper_pr_u->end_time > oper_pr_v->pre_job_oper->start_time)
 							{
-								MOVE_TYPE move_type = FORWARD_INSERT;
-								int mkspan;
+								move_type = FORWARD_INSERT;
 								try_forward_insert_move(sol_pr, mkspan, mach_g, oper_pr_u->oper_mach_i, oper_pr_v->oper_mach_i);
 								cout << mach_g << "\t" << "LF\t" << oper_pr_u->oper_mach_i << "\t" << oper_pr_v->oper_mach_i << "\t" << mkspan << endl;
+								if (min_makespan > mkspan)
+								{
+									min_makespan = mkspan;
+									min_is_p = true;
+									min_mach_u = mach_g;
+									min_u = oper_pr_u->oper_mach_i;
+									min_v = oper_pr_v->oper_mach_i;
+									min_move_type = move_type;
+									equ_cnt = 1;
+
+									min_mach_g = mach_g;
+									min_seq_g = seq_g;
+									min_op_g = op_g;
+									is_left_side = true;
+								}
+								else if (min_makespan == mkspan)
+								{
+									equ_cnt += 1;
+									if (rand() % equ_cnt == 0)
+									{
+										min_is_p = true;
+										min_mach_u = mach_g;
+										min_u = oper_pr_u->oper_mach_i;
+										min_v = oper_pr_v->oper_mach_i;
+										min_move_type = move_type;
+
+										min_mach_g = mach_g;
+										min_seq_g = seq_g;
+										min_op_g = op_g;
+										is_left_side = true;
+									}
+								}
 							}
 						}
 						else  // move v after PM[u]
 						{
-							Solution::Operation *oper_pr_u_mp = machine[sol_pr][mach_g][oper_pr_u->oper_mach_i - 1];
 							if (oper_pr_u_mp->q + oper_pr_u_mp->t > oper_pr_v->next_job_oper->q)
 							{
-								MOVE_TYPE move_type = BACKWARD_INSERT;
-								int mkspan;
+								move_type = BACKWARD_INSERT;
 								try_backward_insert_move(sol_pr, mkspan, mach_g, oper_pr_v->oper_mach_i, oper_pr_u->oper_mach_i - 1);
 								cout << mach_g << "\t" << "LB\t" << oper_pr_v->oper_mach_i << "\t" << oper_pr_u->oper_mach_i - 1 << "\t" << mkspan << endl;
+								if (min_makespan > mkspan)
+								{
+									min_makespan = mkspan;
+									min_is_p = true;
+									min_mach_u = mach_g;
+									min_u = oper_pr_v->oper_mach_i;
+									min_v = oper_pr_u->oper_mach_i - 1;
+									min_move_type = move_type;
+									equ_cnt = 1;
+
+									min_mach_g = mach_g;
+									min_seq_g = seq_g;
+									min_op_g = op_g;
+									is_left_side = true;
+								}
+								else if (min_makespan == mkspan)
+								{
+									equ_cnt += 1;
+									if (rand() % equ_cnt == 0)
+									{
+										min_is_p = true;
+										min_mach_u = mach_g;
+										min_u = oper_pr_v->oper_mach_i;
+										min_v = oper_pr_u->oper_mach_i - 1;
+										min_move_type = move_type;
+
+										min_mach_g = mach_g;
+										min_seq_g = seq_g;
+										min_op_g = op_g;
+										is_left_side = true;
+									}
+								}
 							}
 						}
 					}
 					else  // change assignment
 					{
 						// change assignment of v, move v before u and after MP[u]
-						Solution::Operation *oper_pr_u_mp = machine[sol_pr][mach_g][oper_pr_u->oper_mach_i - 1];
 						if (oper_pr_u->end_time > oper_pr_v->pre_job_oper->end_time&&
 							oper_pr_u_mp->q + oper_pr_u_mp->t > oper_pr_v->next_job_oper->q + oper_pr_v->next_job_oper->t)
 						{
 							oper_pr_v->apx_r = MAX(oper_pr_v->pre_job_oper->end_time, oper_pr_u_mp->end_time);
-							oper_pr_v->apx_q = MAX(oper_pr_v->q + oper_pr_v->t, oper_pr_u->q + oper_pr_u->t);
+							oper_pr_v->apx_q = MAX(oper_pr_v->next_job_oper->q + oper_pr_v->next_job_oper->t, oper_pr_u->q + oper_pr_u->t);
 
 							//int v_t = instance->job_vec[job_i]->oper_vec[oper_job_i]->proc_vec[proc_i]->t;
-							int mkspan = oper_pr_v->apx_r + oper_pr_v->apx_q + oper_g_mp->t;	// here should be oper_g_pm->t
-							cout << mach_g << "\t" << "A\t" << oper_pr_v->oper_mach_i <<"\t"<<mkspan<< endl;
+							mkspan = oper_pr_v->apx_r + oper_pr_v->apx_q + oper_g_mp->t;	// here should be oper_g_mp->t
+							cout << mach_g << "\t" << "LA\t" << oper_pr_u_mp->oper_mach_i << "\t" << oper_pr_v->oper_mach_i << "\t" << mkspan << endl;
+							if (min_makespan > mkspan)
+							{
+								min_makespan = mkspan;
+								min_is_p = false;
+								min_mach_u = oper_pr_v->mach_i;
+								min_u = oper_pr_v->oper_mach_i;
+								min_mach_v = mach_g;
+								min_v = oper_pr_u_mp->oper_mach_i;
+								equ_cnt = 1;
+
+								min_mach_g = mach_g;
+								min_seq_g = seq_g;
+								min_op_g = op_g;
+								is_left_side = true;
+							}
+							else if (min_makespan > mkspan)
+							{
+								equ_cnt += 1;
+								if (rand() % equ_cnt == 0)
+								{
+									min_is_p = false;
+									min_mach_u = oper_pr_v->mach_i;
+									min_u = oper_pr_v->oper_mach_i;
+									min_mach_v = mach_g;
+									min_v = oper_pr_u_mp->oper_mach_i;
+
+									min_mach_g = mach_g;
+									min_seq_g = seq_g;
+									min_op_g = op_g;
+									is_left_side = true;
+								}
+							}
 						}
 					}
-				}
+				}	// end of the left side of common seq
 
 				// the operation on the right side of the common sequence
-				op_g = common_seq[sol_g][mach_g][(seq_g - 1) * 2 + 2];
-				if (op_g<machine_oper_num[sol_g][mach_g])
+				op_g = common_seq[com_g][mach_g][(seq_g - 1) * 2 + 2];
+				if (op_g < machine_oper_num[sol_g][mach_g] && common_flag[mach_g][op_g + 1] == 0)
 				{
 					Solution::Operation *oper_g = machine[sol_g][mach_g][op_g];
 					Solution::Operation *oper_g_ms = machine[sol_g][mach_g][op_g + 1];
 					Solution::Operation *oper_pr_u = job[sol_pr][oper_g->job_i][oper_g->oper_job_i];
-					Solution::Operation *oper_pr_v = job[sol_pr][oper_g_ms->job_i][oper_g_ms->oper_job_i];	// move v before u
+					Solution::Operation *oper_pr_v = job[sol_pr][oper_g_ms->job_i][oper_g_ms->oper_job_i];
+					Solution::Operation *oper_pr_u_ms = machine[sol_pr][mach_g][oper_pr_u->oper_mach_i + 1];
 					if (oper_pr_v->mach_i == mach_g)	// change permutaion
 					{
-						if (oper_pr_u->oper_mach_i > oper_pr_v->oper_mach_i)	// move v before MS[u]
+						if (oper_pr_u->oper_mach_i < oper_pr_v->oper_mach_i)	// move v before MS[u]
 						{
-							Solution::Operation *oper_pr_u_ms = machine[sol_pr][mach_g][oper_pr_u->oper_mach_i + 1];
 							if (oper_pr_u_ms->end_time > oper_pr_v->pre_job_oper->start_time)
 							{
-								MOVE_TYPE move_type = FORWARD_INSERT;
-								int mkspan;
-								try_forward_insert_move(sol_pr, mkspan, mach_g, oper_pr_u->oper_mach_i, oper_pr_v->oper_mach_i);
-								cout << mach_g << "\t" << "RF\t" << oper_pr_u->oper_mach_i << "\t" << oper_pr_v->oper_mach_i << "\t" << mkspan << endl;
+								move_type = FORWARD_INSERT;
+								try_forward_insert_move(sol_pr, mkspan, mach_g, oper_pr_u->oper_mach_i + 1, oper_pr_v->oper_mach_i);
+								cout << mach_g << "\t" << "RF\t" << oper_pr_u->oper_mach_i + 1 << "\t" << oper_pr_v->oper_mach_i << "\t" << mkspan << "\t"
+									<< op_g << endl;
+								if (min_makespan > mkspan)
+								{
+									min_makespan = mkspan;
+									min_is_p = true;
+									min_mach_u = mach_g;
+									min_u = oper_pr_u->oper_mach_i + 1;
+									min_v = oper_pr_v->oper_mach_i;
+									min_move_type = move_type;
+									equ_cnt = 1;
+
+									min_mach_g = mach_g;
+									min_seq_g = seq_g;
+									min_op_g = op_g;
+									is_left_side = false;
+								}
+								else if (min_makespan == mkspan)
+								{
+									equ_cnt += 1;
+									if (rand() % equ_cnt == 0)
+									{
+										min_is_p = true;
+										min_mach_u = mach_g;
+										min_u = oper_pr_u->oper_mach_i + 1;
+										min_v = oper_pr_v->oper_mach_i;
+										min_move_type = move_type;
+
+										min_mach_g = mach_g;
+										min_seq_g = seq_g;
+										min_op_g = op_g;
+										is_left_side = false;
+									}
+								}
 							}
 						}
 						else  // move v after u
 						{
 							if (oper_pr_u->q + oper_pr_u->t > oper_pr_v->next_job_oper->q)
 							{
-								MOVE_TYPE move_type = BACKWARD_INSERT;
-								int mkspan;
-								try_backward_insert_move(sol_pr, mkspan, mach_g, oper_pr_v->oper_mach_i, oper_pr_u->oper_mach_i - 1);
-								cout << mach_g << "\t" << "RB\t" << oper_pr_v->oper_mach_i << "\t" << oper_pr_u->oper_mach_i - 1 << "\t" << mkspan << endl;
+								move_type = BACKWARD_INSERT;
+								try_backward_insert_move(sol_pr, mkspan, mach_g, oper_pr_v->oper_mach_i, oper_pr_u->oper_mach_i);
+								cout << mach_g << "\t" << "RB\t" << oper_pr_v->oper_mach_i << "\t" << oper_pr_u->oper_mach_i << "\t" << mkspan << endl;
+								if (min_makespan > mkspan)
+								{
+									min_makespan = mkspan;
+									min_is_p = true;
+									min_mach_u = mach_g;
+									min_u = oper_pr_v->oper_mach_i;
+									min_v = oper_pr_u->oper_mach_i;
+									min_move_type = move_type;
+									equ_cnt = 1;
+
+									min_mach_g = mach_g;
+									min_seq_g = seq_g;
+									min_op_g = op_g;
+									is_left_side = false;
+								}
+								else if (min_makespan == mkspan)
+								{
+									equ_cnt += 1;
+									if (rand() % equ_cnt == 0)
+									{
+										min_is_p = true;
+										min_mach_u = mach_g;
+										min_u = oper_pr_v->oper_mach_i;
+										min_v = oper_pr_u->oper_mach_i;
+										min_move_type = move_type;
+
+										min_mach_g = mach_g;
+										min_seq_g = seq_g;
+										min_op_g = op_g;
+										is_left_side = false;
+									}
+								}
 							}
 						}
 					}
 					else  // change assignment
 					{
 						// change assignment of v, move v after u and before MS[u]
-						Solution::Operation *oper_pr_u_ms = machine[sol_pr][mach_g][oper_pr_u->oper_mach_i - 1];
 						if (oper_pr_u_ms->end_time > oper_pr_v->pre_job_oper->end_time&&
 							oper_pr_u->q + oper_pr_u->t > oper_pr_v->next_job_oper->q + oper_pr_v->next_job_oper->t)
 						{
 							oper_pr_v->apx_r = MAX(oper_pr_v->pre_job_oper->end_time, oper_pr_u->end_time);
-							oper_pr_v->apx_q = MAX(oper_pr_v->q + oper_pr_v->t, oper_pr_u_ms->q + oper_pr_u_ms->t);
+							oper_pr_v->apx_q = MAX(oper_pr_v->next_job_oper->q + oper_pr_v->next_job_oper->t, oper_pr_u_ms->q + oper_pr_u_ms->t);
 
 							//int v_t = instance->job_vec[job_i]->oper_vec[oper_job_i]->proc_vec[proc_i]->t;
-							int mkspan = oper_pr_v->apx_r + oper_pr_v->apx_q + oper_g_ms->t;	// here should be oper_g_pm->t
-							cout << mach_g << "\t" << "A\t" << oper_pr_v->oper_mach_i<<"\t" << mkspan << endl;
+							mkspan = oper_pr_v->apx_r + oper_pr_v->apx_q + oper_g_ms->t;	// here should be oper_g_pm->t
+							cout << mach_g << "\t" << "RA\t" << oper_pr_u->oper_mach_i << "\t" << oper_pr_v->oper_mach_i << "\t" << mkspan << endl;
+							if (min_makespan > mkspan)
+							{
+								min_makespan = mkspan;
+								min_is_p = false;
+								min_mach_u = oper_pr_v->mach_i;
+								min_u = oper_pr_v->oper_mach_i;
+								min_mach_v = mach_g;
+								min_v = oper_pr_u->oper_mach_i;
+								equ_cnt = 1;
 
+								min_mach_g = mach_g;
+								min_seq_g = seq_g;
+								min_op_g = op_g;
+								is_left_side = false;
+							}
+							else if (min_makespan > mkspan)
+							{
+								equ_cnt += 1;
+								if (rand() % equ_cnt == 0)
+								{
+									min_is_p = false;
+									min_mach_u = oper_pr_v->mach_i;
+									min_u = oper_pr_v->oper_mach_i;
+									min_mach_v = mach_g;
+									min_v = oper_pr_u->oper_mach_i;
+
+									min_mach_g = mach_g;
+									min_seq_g = seq_g;
+									min_op_g = op_g;
+									is_left_side = false;
+								}
+							}
 						}
 					}
-				}
+				}	// end of the right side of common seq
+			}	// end of common seq of mach_g
+		}	// end of common seq of all machines
+		if (min_makespan != INT_MAX)
+		{
+			if (min_is_p)
+				apply_permutation_move(sol_pr, min_mach_u, min_u, min_v, min_move_type);
+			else
+				apply_assign_move(sol_pr, min_mach_u, min_u, min_mach_v, min_v);
+			calculate_r(sol_pr);
+			calculate_q_crit_block(sol_pr);
+			check_solution(sol_pr);
+			if (is_left_side)
+			{
+				common_seq[com_g][min_mach_g][(min_seq_g - 1) * 2 + 1] -= 1;
+				common_flag[min_mach_g][min_op_g - 1] = 1;
+			}
+			else
+			{
+				common_seq[com_g][min_mach_g][(min_seq_g - 1) * 2 + 2] += 1;
+				common_flag[min_mach_g][min_op_g + 1] = 1;
 			}
 		}
+		else
+			cout << "CAN NOT PASS";
+		//*****begin of select the best one*****
 	}
 }
 void Solver::perturb(int sol_index, int sol_index_best, int ptr_len, int ptr_type)
