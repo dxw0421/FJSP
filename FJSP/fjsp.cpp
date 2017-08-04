@@ -166,6 +166,7 @@ public:
 	void apply_assign_move(int, int, int, int, int);
 	void calculate_distance(int, int, int&, int&);
 	void path_relinking(int, int,int,int);
+	void find_common_seq(int, int);
 };
 Instance::Instance(string _file_input) :file_input(_file_input), total_num_operation(0)
 {
@@ -957,7 +958,6 @@ void Solver::change_permutation(int sol_cur, int sol_best, int &min_u, int &min_
 			}
 		}
 	}
-
 }
 void Solver::change_machine(int sol_cur, int sol_best, int &min_u, int &min_mach_u, int &min_v, int &min_mach_v, int &min_makespan)
 {
@@ -1246,24 +1246,24 @@ void Solver::calculate_distance(int sol_a, int sol_b, int &a_dis, int &p_dis)
 				//cout << oper_a->job_i << "," << oper_a->oper_job_i << endl;
 			}
 			else
-				p_dis += abs(job[sol_b][oper_a->job_i][oper_a->oper_job_i]->oper_job_i - op_a);
+				p_dis += abs(job[sol_b][oper_a->job_i][oper_a->oper_job_i]->oper_mach_i - op_a);
 		}
 	}
 }
-void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
+void Solver::find_common_seq(int sol_s, int sol_g)
 {
+
 	memset(common_seq, 0, sizeof(common_seq));
 	int com_s = 0, com_g = 1;
-	replace_solution(sol_pr, sol_s);
 	// find the common operation sequences
 	for (int mach_s = 1; mach_s <= instance->m; mach_s++)
 	{
 		int consec_cnt = 0, seq_cnt = 0;
-		for (int op_s = 1, op_g =1; op_s <= machine_oper_num[sol_s][mach_s]&& op_g <= machine_oper_num[sol_g][mach_s];)
+		for (int op_s = 1, op_g = 1; op_s <= machine_oper_num[sol_s][mach_s] && op_g <= machine_oper_num[sol_g][mach_s];)
 		{
 			Solution::Operation *oper_s = machine[sol_s][mach_s][op_s];
 			Solution::Operation *oper_g = job[sol_g][oper_s->job_i][oper_s->oper_job_i];
-			if (oper_g->mach_i != mach_s||oper_g->oper_mach_i<op_g)
+			if (oper_g->mach_i != mach_s || oper_g->oper_mach_i<op_g)
 			{
 				consec_cnt = 0;
 				op_s += 1;
@@ -1273,13 +1273,13 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 
 			common_seq[com_s][mach_s][seq_cnt * 2 + 1] = op_s;
 			common_seq[com_g][mach_s][seq_cnt * 2 + 1] = op_g;
-			
+
 			consec_cnt += 1;
 			op_s += 1;
 			op_g += 1;
 			while (machine[sol_g][mach_s][op_g]->job_i == machine[sol_s][mach_s][op_s]->job_i&&
 				machine[sol_g][mach_s][op_g]->oper_job_i == machine[sol_s][mach_s][op_s]->oper_job_i&&
-				machine[sol_g][mach_s][op_g] != dummy_oper[sol_g][END]&& machine[sol_s][mach_s][op_s] != dummy_oper[sol_s][END])
+				machine[sol_g][mach_s][op_g] != dummy_oper[sol_g][END] && machine[sol_s][mach_s][op_s] != dummy_oper[sol_s][END])
 			{
 				consec_cnt += 1;
 				op_s += 1;
@@ -1303,7 +1303,7 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 		}
 		common_seq[com_s][mach_s][0] = common_seq[com_g][mach_s][0] = seq_cnt;
 	}
-	cout << "common seq:" << endl;
+	/*cout << "common seq:" << endl;
 	for (int mach_i = 1; mach_i <= instance->m; mach_i++)
 	{
 		for (int seq_i = 1; seq_i <= common_seq[com_s][mach_i][0]; seq_i++)
@@ -1331,8 +1331,146 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 			cout << " | ";
 		}
 		cout << endl << endl;
+	}*/
+}
+void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
+{
+	replace_solution(sol_pr, sol_s);
+	//find_common_seq(sol_s, sol_g);
+
+	int ass_diff[MAXN][3];
+	memset(ass_diff, 0, sizeof(ass_diff));
+
+	for (int mach_s = 1; mach_s <= instance->m; mach_s++)
+	{
+		for (int op_s = 1; op_s <= machine_oper_num[sol_pr][mach_s]; op_s++)
+		{
+			Solution::Operation *oper_u = machine[sol_pr][mach_s][op_s];
+			int mach_v = job[sol_g][oper_u->job_i][oper_u->oper_job_i]->mach_i;
+			if (job[sol_g][oper_u->job_i][oper_u->oper_job_i]->mach_i != mach_s)
+			{
+				ass_diff[0][0] += 1;
+				ass_diff[ass_diff[0][0]][1] = oper_u->job_i;
+				ass_diff[ass_diff[0][0]][2] = oper_u->oper_job_i;
+			}
+		}
 	}
+	for (int diff_cnt = 1; diff_cnt <= ass_diff[0][0]*0.5; diff_cnt++)
+	{
+		int min_makespan = INT_MAX, min_u, min_mach_u, min_v, min_mach_v, min_diff_i, equ_cnt;
+		for (int diff_i = 1; diff_i <= ass_diff[0][0]; diff_i++)
+		{
+			if (ass_diff[diff_i][0] == 1)
+				continue;
+			Solution::Operation *oper_u = job[sol_pr][ass_diff[diff_i][1]][ass_diff[diff_i][2]];
+			int mach_v = job[sol_g][oper_u->job_i][oper_u->oper_job_i]->mach_i;
+			int left_i = 0, right_i = machine_oper_num[sol_pr][mach_v] + 1;
+
+			for (int m_i = machine_oper_num[sol_pr][mach_v]; m_i >= 1; m_i--)	//determine right_i
+			{
+				Solution::Operation *oper_v = machine[sol_pr][mach_v][m_i];
+				if (oper_v->end_time > oper_u->pre_job_oper->end_time)	// move u before v
+																		//if (v->end_time <= oper_u->pre_job_oper->start_time)
+				{
+					right_i = m_i;
+					//break;
+				}
+				else break;
+			}
+
+			for (int m_i = 1; m_i <= machine_oper_num[sol_pr][mach_v]; m_i++)	// determine left_i
+			{
+				Solution::Operation *oper_v = machine[sol_pr][mach_v][m_i];	// move u after v
+				if (oper_v->q + oper_v->t > oper_u->next_job_oper->q + oper_u->next_job_oper->t)
+					//if (oper_u->next_job_oper->q >= v->q + v->t)
+				{
+					left_i = m_i;
+					//break;
+				}
+				else break;
+			}
+			if (left_i > right_i)
+			{
+				int temp = left_i;
+				left_i = right_i;
+				right_i = temp;
+			}
+			else if (left_i == right_i)
+			{
+				left_i -= 1;
+				right_i += 1;
+			}
+			int v_t = job[sol_g][oper_u->job_i][oper_u->oper_job_i]->t;
+
+			for (int v = left_i; v < right_i; v++)	// for each feasible position
+			{
+				Solution::Operation *oper_v = machine[sol_pr][mach_v][v];	// insert oper_u after v
+				oper_u->apx_r = MAX(oper_u->pre_job_oper->end_time, oper_v->end_time);
+				oper_u->apx_q = MAX(oper_u->next_job_oper->q + oper_u->next_job_oper->t,
+					machine[sol_pr][mach_v][v + 1]->q + machine[sol_pr][mach_v][v + 1]->t);	// v->next_mach_oper
+				ns_a_cnt += 1;
+				int mkspan = oper_u->apx_r + oper_u->apx_q + v_t;
+				if (mkspan <= min_makespan)
+				{
+					if (mkspan < min_makespan)
+					{
+						min_makespan = mkspan;
+						min_u = oper_u->oper_mach_i;
+						min_mach_u = oper_u->mach_i;
+						min_v = v;
+						min_mach_v = mach_v;
+						min_diff_i = diff_i;
+						equ_cnt = 1;
+					}
+					else if (min_makespan == mkspan)
+					{
+						equ_cnt += 1;
+						if (rand() % equ_cnt == 0)
+						{
+							min_u = oper_u->oper_mach_i;
+							min_mach_u = oper_u->mach_i;
+							min_v = v;
+							min_mach_v = mach_v;
+							min_diff_i = diff_i;
+						}
+					}
+				}
+			}
+		}
+		if (min_makespan == INT_MAX)
+			continue;
+		apply_assign_move(sol_pr, min_mach_u, min_u, min_mach_v, min_v);
+		cout << min_mach_u << "\t" << min_u << "\t" << min_mach_v << "\t" << min_v << endl;
+		calculate_r(sol_pr);
+		calculate_q_crit_block(sol_pr);
+		check_solution(sol_pr);
+		ass_diff[min_diff_i][0] = 1;
+	}
+	int a_dis, p_dis;
+	calculate_distance(sol_s, sol_g, a_dis, p_dis);
+	calculate_distance(sol_s, sol_pr, a_dis, p_dis);
+	calculate_distance(sol_pr, sol_g, a_dis, p_dis);
+	
+	memset(ass_diff, 0, sizeof(ass_diff));
+	for (int mach_s = 1; mach_s <= instance->m; mach_s++)
+	{
+		for (int op_s = 1; op_s <= machine_oper_num[sol_pr][mach_s]; op_s++)
+		{
+			Solution::Operation *oper_u = machine[sol_pr][mach_s][op_s];
+			int mach_v = job[sol_g][oper_u->job_i][oper_u->oper_job_i]->mach_i;
+			if (job[sol_g][oper_u->job_i][oper_u->oper_job_i]->mach_i != mach_s)
+			{
+				ass_diff[0][0] += 1;
+				ass_diff[ass_diff[0][0]][1] = oper_u->job_i;
+				ass_diff[ass_diff[0][0]][2] = oper_u->oper_job_i;
+			}
+		}
+	}
+
+
+	find_common_seq(sol_s, sol_g);
 	int common_flag[MAXN][MAXO];
+	int com_s = 0, com_g = 1;
 	memset(common_flag, 0, sizeof(common_flag));
 	int total_non_seq = instance->total_num_operation;
 	for (int mach_i = 1; mach_i <= instance->m; mach_i++)
@@ -1344,8 +1482,8 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 				common_flag[mach_i][op_i] = 1;
 		}
 	}
-
-	for (int diff_cnt = 1; diff_cnt <= total_non_seq; diff_cnt++)
+	bool still_move = true;
+	for (int diff_cnt = 1; diff_cnt <= total_non_seq&&still_move; diff_cnt++)
 	{
 		//*****begin of select the best one*****
 		cout << diff_cnt << "*************" << endl;
@@ -1389,6 +1527,9 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 									min_seq_g = seq_g;
 									min_op_g = op_g;
 									is_left_side = true;
+
+									if (min_u == min_v)
+										cout << endl;
 								}
 								else if (min_makespan == mkspan)
 								{
@@ -1405,6 +1546,8 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 										min_seq_g = seq_g;
 										min_op_g = op_g;
 										is_left_side = true;
+										if (min_u == min_v)
+											cout << endl;
 									}
 								}
 							}
@@ -1430,6 +1573,8 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 									min_seq_g = seq_g;
 									min_op_g = op_g;
 									is_left_side = true;
+									if (min_u == min_v)
+										cout << endl;
 								}
 								else if (min_makespan == mkspan)
 								{
@@ -1446,13 +1591,15 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 										min_seq_g = seq_g;
 										min_op_g = op_g;
 										is_left_side = true;
+										if (min_u == min_v)
+											cout << endl;
 									}
 								}
 							}
 						}
 					}
 					else  // change assignment
-					{
+					{ 
 						// change assignment of v, move v before u and after MP[u]
 						if (oper_pr_u->end_time > oper_pr_v->pre_job_oper->end_time&&
 							oper_pr_u_mp->q + oper_pr_u_mp->t > oper_pr_v->next_job_oper->q + oper_pr_v->next_job_oper->t)
@@ -1650,13 +1797,13 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 			if (min_is_p)
 			{
 				apply_permutation_move(sol_pr, min_mach_u, min_u, min_v, min_move_type);
-				cout << min_mach_u << "\t" << min_u << "\t" << min_v << "\t"
+				cout << min_mach_u << "\t" << min_u << "\t" << min_v << "\t" << min_makespan << "\t"
 					<< (min_move_type == BACKWARD_INSERT ? "B" : "F") << endl;
 			}
 			else
 			{
 				apply_assign_move(sol_pr, min_mach_u, min_u, min_mach_v, min_v);
-				cout << min_mach_u << "\t" << min_u << "\t" << min_mach_v << "\t" << min_v << endl;
+				cout << min_mach_u << "\t" << min_u << "\t" << min_mach_v << "\t" << min_v << "\t" << "A" << endl;
 			}
 			/*if (diff_cnt == 74)
 				display_solution(sol_pr);*/
@@ -1684,17 +1831,21 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 		}
 		else
 		{
-			cout << "CAN NOT PASS" << endl;
-			display_solution(sol_pr);
+			//cout << "CAN NOT PASS" << endl;
+			check_solution(sol_pr);
+			calculate_distance(sol_s, sol_g, a_dis, p_dis);
+			calculate_distance(sol_s, sol_pr, a_dis, p_dis);
+			calculate_distance(sol_pr, sol_g, a_dis, p_dis);
+			still_move = false;
+			break;
+
 			//apply_permutation_move(sol_pr, min_mach_u, min_u, min_v, min_move_type);
-			apply_permutation_move(sol_pr, 1, 9, 11, BACKWARD_INSERT);
+			/*apply_permutation_move(sol_pr, 1, 9, 11, BACKWARD_INSERT);
 			calculate_r(sol_pr);
 			calculate_q_crit_block(sol_pr);
-
 			check_solution(sol_pr);
-			display_solution(sol_pr);
+			display_solution(sol_pr);*/
 		}
-		//*****begin of select the best one*****
 	}
 }
 void Solver::perturb(int sol_index, int sol_index_best, int ptr_len, int ptr_type)
