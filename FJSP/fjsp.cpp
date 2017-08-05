@@ -139,10 +139,12 @@ public:
 	int tt0, d1, d2, tt1, d3, d4;	// for tabu tenure
 	int best_known_makespan, ts_iteraion, ts_restart;
 	int big_ptr, big_ptr_type, small_ptr, small_ptr_type;
+	int pr_a, pr_p, iter_cyc, rand_seed;
 
 	int ns_p_cnt, ns_a_cnt;
-
-	Solver(const Instance &, int);
+	ofstream ofs;
+	string file_output;
+	Solver(const Instance &, int,string);
 	void display_machine_operation(int, int)const;
 	void read_solution(int, string);
 	void init_solution(int);
@@ -152,6 +154,7 @@ public:
 	void change_permutation(int, int, int&, int&, int&, int&, MOVE_TYPE&);
 	void tabu_search(int, int);
 	void ITS();
+	void H2O();
 	void try_backward_insert_move(int, int&, int, int, int);
 	void try_forward_insert_move(int, int&, int, int, int);
 	void apply_permutation_move(int, int, int, int, MOVE_TYPE);
@@ -167,6 +170,8 @@ public:
 	void calculate_distance(int, int, int&, int&);
 	void path_relinking(int, int, int, int);
 	void find_common_seq(int, int);
+	void save_best(int, int, int);
+	void save_solution(int);
 };
 Instance::Instance(string _file_input) :file_input(_file_input), total_num_operation(0)
 {
@@ -202,7 +207,11 @@ Instance::Instance(string _file_input) :file_input(_file_input), total_num_opera
 				oper->num_mach = stoi(fields_vec[field_cnt++]);	// number of process
 				for (int j = 0; j < oper->num_mach; j++)
 				{
-					Process *proc = new Process(stoi(fields_vec[field_cnt++]), stoi(fields_vec[field_cnt++]));
+					int mach = stoi(fields_vec[field_cnt]);
+					field_cnt += 1;
+					int t = stoi(fields_vec[field_cnt]);
+					field_cnt += 1;
+					Process *proc = new Process(t, mach);	// machine index +1
 					oper->proc_vec.push_back(proc);
 				}
 				jobinfo->oper_vec.push_back(oper);
@@ -232,7 +241,11 @@ Instance::Instance(string _file_input) :file_input(_file_input), total_num_opera
 				oper->num_mach = 1;	// stoi(fields_vec[field_cnt++]);	// number of process
 				for (int j = 0; j < oper->num_mach; j++)
 				{
-					Process *proc = new Process(stoi(fields_vec[field_cnt++]), stoi(fields_vec[field_cnt++]) + 1);	// machine index +1
+					int mach = stoi(fields_vec[field_cnt]) + 1;
+					field_cnt += 1;
+					int t = stoi(fields_vec[field_cnt]);
+					field_cnt += 1;
+					Process *proc = new Process(t, mach);	// machine index +1
 					oper->proc_vec.push_back(proc);
 				}
 				jobinfo->oper_vec.push_back(oper);
@@ -263,7 +276,7 @@ void Instance::display_instance()const
 		cout << endl;
 	}
 }
-Solver::Solver(const Instance &_instance, int _sol_num) :instance(&_instance), sol_num(_sol_num)
+Solver::Solver(const Instance &_instance, int _sol_num,string _file_output) :instance(&_instance), sol_num(_sol_num), file_output(_file_output)
 {
 	for (int i = 0; i <= sol_num; i++)
 	{
@@ -290,6 +303,14 @@ Solver::Solver(const Instance &_instance, int _sol_num) :instance(&_instance), s
 			machine_oper_num[i][j] = 0;
 		}
 	}
+	ofs.open(file_output, ios::app | ios::out);
+	if (!ofs.is_open())
+	{
+		cout << file_output << endl; perror("file_output error.");
+		exit(0);
+	}
+	ofs.setf(ios::fixed, ios::floatfield);
+	ofs.precision(6);
 }
 void Solver::read_solution(int sol_index, string file_input)
 {
@@ -358,7 +379,7 @@ void Solver::display_solution(int sol_index)const
 		cout << "m " << mach_i << ", " << machine_oper_num[sol_index][mach_i] << ":\t";
 		for (int oper_i = 1; oper_i <= machine_oper_num[sol_index][mach_i]; oper_i++)
 			cout << machine[sol_index][mach_i][oper_i]->job_i << "," << machine[sol_index][mach_i][oper_i]->oper_job_i << "\t"
-			/*<< machine[sol_index][mach_i][oper_i]->start_time << "\t" << machine[sol_index][mach_i][oper_i]->end_time << "\t"*/;
+			<< machine[sol_index][mach_i][oper_i]->start_time << "\t" << machine[sol_index][mach_i][oper_i]->end_time << "\t" << machine[sol_index][mach_i][oper_i]->t << "\t";
 		cout << endl;
 	}
 }
@@ -1164,7 +1185,7 @@ void Solver::tabu_search(int sol_cur, int sol_best)
 				<< makespan[sol_cur] << "\t" << makespan[sol_base] << "\t" << makespan[sol_best] << "\t"
 				<< (end_time - start_time) / CLOCKS_PER_SEC
 				<< endl;*/
-			if (makespan[sol_best] > makespan[sol_cur])
+			/*if (makespan[sol_best] > makespan[sol_cur])
 			{
 				replace_solution(sol_best, sol_cur);
 				cout << global_iteration << "\t" << permutation_iteration << "\t" << min_mach_i << "\t"
@@ -1174,7 +1195,7 @@ void Solver::tabu_search(int sol_cur, int sol_best)
 				<< makespan[sol_cur] << "\t" << makespan[sol_base] << "\t" << makespan[sol_best] << "\t"
 				<< (end_time - start_time) / CLOCKS_PER_SEC
 				<< endl;
-			}
+			}*/
 		}
 		/*if (ts_iter >= 4)
 		cout << ns_p_cnt << "\t" << ns_a_cnt << endl;*/
@@ -1187,7 +1208,102 @@ void Solver::tabu_search(int sol_cur, int sol_best)
 	memset(assignment_tabu_list[sol_cur], 0, sizeof(assignment_tabu_list[sol_cur]));
 	clear_tabu_list(sol_cur);
 }
+void Solver::save_best(int best, int c1, int c2)
+{
+	if (makespan[best]>makespan[c1])
+	{
+		replace_solution(best, c1);
+	}
+	else if (makespan[best] == makespan[c1])
+	{
+		if (rand() % 2)
+			replace_solution(best, c1);
+	}
+	if (c1 != c2)
+	{
+		if (makespan[best]>makespan[c2])
+		{
+			replace_solution(best, c2);
+		}
+		else if (makespan[best] == makespan[c2])
+		{
+			if (rand() % 2)
+				replace_solution(best, c2);
+		}
+	}
+}
+void Solver::save_solution(int sol_index)
+{
+	ofs<<
+}
+void Solver::H2O()
+{
+	int sol_p1 = 1, sol_p2 = 2, sol_elite1 = 3, sol_elite2 = 4, sol_pr = 5, sol_best = 6, sol_temp = 7;
+	start_time = clock();
+	global_iteration = permutation_iteration = assignment_iteration = 0;
+	init_solution1(sol_p1);
+	init_solution1(sol_p2);
+	init_solution1(sol_elite1);
+	init_solution1(sol_elite2);
+	replace_solution(sol_best, sol_p1);
+	
+	int no_move_cnt = 0, non_consec_imp = 0;
+	for (int gen = 1; gen <= ts_restart; gen++)
+	{
+		path_relinking(sol_p1, sol_p2, sol_pr, 0);
+		replace_solution(sol_temp, sol_pr);
+		path_relinking(sol_p2, sol_p1, sol_pr, 0);
+		replace_solution(sol_p2, sol_pr);
+		replace_solution(sol_p1, sol_temp);
 
+		int a_dis, p_dis;
+		calculate_distance(sol_p1, sol_p2, a_dis, p_dis);
+		cout << a_dis << "\t" << p_dis << endl;
+		/*calculate_distance(sol_p1, sol_pr, a_dis, p_dis);
+		cout << a_dis << "\t" << p_dis << endl;
+		calculate_distance(sol_pr, sol_p2, a_dis, p_dis);
+		cout << a_dis << "\t" << p_dis << endl;*/
+
+
+		tabu_search(sol_p1, sol_best);
+		tabu_search(sol_p2, sol_best);
+		
+		save_best(sol_elite1, sol_p1, sol_p2);
+		//save_best(sol_best, sol_elite1, sol_elite1);
+
+		if (makespan[sol_best]>makespan[sol_elite1])
+		{
+			non_consec_imp = 0;
+			replace_solution(sol_best, sol_elite1);
+		}
+		else if (makespan[sol_best] == makespan[sol_elite1])
+		{
+			if (rand() % 2)
+				replace_solution(sol_best, sol_elite1);
+		}
+		else
+			non_consec_imp += 1;
+		if ((non_consec_imp+1)%iter_cyc == 0)
+			init_solution1(sol_p2);
+		if (gen%iter_cyc == 0)
+		{
+			replace_solution(sol_p1, sol_elite2);
+			replace_solution(sol_elite2, sol_elite1);
+			init_solution(sol_elite1);
+			cout << "*";
+		}
+
+		end_time = clock();
+		cout << gen << "\t" << (end_time - start_time) / CLOCKS_PER_SEC << "\t" << no_move_cnt << "\t"
+			<< makespan[sol_best] << "\t"
+			<< " **********************************" << endl;
+	}
+	end_time = clock();
+	cout << permutation_iteration << "\t"
+		<< makespan[sol_p1] << "\t" << makespan[sol_best] << "\t" << best_known_makespan << "\t"
+		<< (end_time - start_time) / CLOCKS_PER_SEC
+		<< endl;
+}
 void Solver::ITS()
 {
 	int sol_p1 = 1, sol_p2 = 2, sol_best = 3, sol_pr = 4;
@@ -1372,7 +1488,7 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 			}
 		}
 	}
-	for (int diff_cnt = 1; diff_cnt <= ass_diff[0][0] * 0.5; diff_cnt++)
+	for (int diff_cnt = 1; diff_cnt <= ass_diff[0][0] * pr_a*0.01; diff_cnt++)
 	{
 		int min_makespan = INT_MAX, min_u, min_mach_u, min_v, min_mach_v, min_diff_i, equ_cnt;
 		for (int diff_i = 1; diff_i <= ass_diff[0][0]; diff_i++)
@@ -1460,7 +1576,7 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 		//cout << min_mach_u << "\t" << min_u << "\t" << min_mach_v << "\t" << min_v << endl;
 		calculate_r(sol_pr);
 		calculate_q_crit_block(sol_pr);
-		check_solution(sol_pr);
+		//check_solution(sol_pr);
 		ass_diff[min_diff_i][0] = 1;
 	}
 	/*int a_dis, p_dis;
@@ -1485,7 +1601,7 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 				common_flag[mach_i][op_i] = 1;
 		}
 	}
-	for (int diff_cnt = 1; diff_cnt <= total_non_seq; diff_cnt++)
+	for (int diff_cnt = 1; diff_cnt <= total_non_seq*pr_p*0.01; diff_cnt++)
 	{
 		//*****begin of select the best one*****
 		//cout << diff_cnt << "*************" << endl;
@@ -1552,7 +1668,7 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 						}
 						else  // move v after PM[u]
 						{
-							if (oper_pr_u_mp->q + oper_pr_u_mp->t > oper_pr_v->next_job_oper->q)
+							if (oper_pr_u_mp->q + oper_pr_u_mp->t > oper_pr_v->next_job_oper->q&&oper_pr_v->job_i!=oper_pr_u_mp->job_i)
 							{
 								move_type = BACKWARD_INSERT;
 								try_backward_insert_move(sol_pr, mkspan, mach_g, oper_pr_v->oper_mach_i, oper_pr_u->oper_mach_i - 1);
@@ -1697,7 +1813,7 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 						}
 						else  // move v after u
 						{
-							if (oper_pr_u->q + oper_pr_u->t > oper_pr_v->next_job_oper->q)
+							if (oper_pr_u->q + oper_pr_u->t > oper_pr_v->next_job_oper->q&&oper_pr_u->job_i!=oper_pr_v->job_i)
 							{
 								move_type = BACKWARD_INSERT;
 								try_backward_insert_move(sol_pr, mkspan, mach_g, oper_pr_v->oper_mach_i, oper_pr_u->oper_mach_i);
@@ -1789,12 +1905,12 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 		}	// end of common seq of all machines
 		if (min_makespan != INT_MAX)
 		{
-			/*if (diff_cnt == 47)
+			/*if (diff_cnt == 1)
 				display_solution(sol_pr);*/
 			if (min_is_p)
 			{
 				apply_permutation_move(sol_pr, min_mach_u, min_u, min_v, min_move_type);
-			/*	cout << min_mach_u << "\t" << min_u << "\t" << min_v << "\t" << min_makespan << "\t"
+				/*cout << min_mach_u << "\t" << min_u << "\t" << min_v << "\t" << min_makespan << "\t"
 					<< (min_move_type == BACKWARD_INSERT ? "B" : "F") << endl;*/
 			}
 			else
@@ -1802,7 +1918,7 @@ void Solver::path_relinking(int sol_s, int sol_g, int sol_pr, int temp)
 				apply_assign_move(sol_pr, min_mach_u, min_u, min_mach_v, min_v);
 				//cout << min_mach_u << "\t" << min_u << "\t" << min_mach_v << "\t" << min_v << "\t" << "A" << endl;
 			}
-			/*if (diff_cnt == 47)
+			/*if (diff_cnt == 1)
 				display_solution(sol_pr);*/
 			calculate_r(sol_pr);
 			calculate_q_crit_block(sol_pr);
@@ -2156,7 +2272,7 @@ void Solver::calculate_q_crit_block(int sol_index)
 int main(int argc, char **argv)
 {
 	int rs = time(NULL);
-	//rs = 1501915310;//1501136984
+	//rs = 1501921974;//1501136984
 	srand(rs);
 	char *argv_win[] = { "",	// 0
 		"_ifp", "instances\\Dauzere_Data\\",	// instances\\Dauzere_Data\\ | instances\\DemirkolBenchmarksJobShop\\ 
@@ -2164,13 +2280,14 @@ int main(int argc, char **argv)
 		//"_ifp", "instances\\DemirkolBenchmarksJobShop\\",
 		"_sfp","solutions\\best_solutions\\",	// solution file path
 		//"_ifn", "seti5xyz",	"_suffix",".fjs", "_best_obj","1125",
-		"_ifn", "01a",	"_suffix",".fjs", "_best_obj","2505",	// 01a, .fjs | cscmax_20_15_1 .txt 
+		"_ifn", "03a",	"_suffix",".fjs", "_best_obj","2228",	// 01a, .fjs | cscmax_20_15_1 .txt 
 		//"_ifn", "rcmax_40_20_2", "_suffix",".txt", "_best_obj","4691",
 		"_sfn","dmu15_rcmax_30_15_1pb_3384",	// solution file name 
-		"_sol_num", "6", "_tt0","10", "_d1","5", "_d2", "12",	// 01a (2505) rcmax_30_15_1(3343) rcmax_50_20_2(5621) rcmax_40_20_2(4691 ) rcmax_30_15_9(3430) rcmax_20_15_8(2669)
-						 "_tt1","10", "_d3","5", "_d4", "12",
+		"_sol_num", "10", "_tt0","10", "_d1","5", "_d2", "12",	// 01a (2505) rcmax_30_15_1(3343) rcmax_50_20_2(5621) rcmax_40_20_2(4691 ) rcmax_30_15_9(3430) rcmax_20_15_8(2669)
+						  "_tt1","10", "_d3","5", "_d4", "12",
 		"_bptr","10","_bptrt","0","_sptr","4","_sptrt","0",
-		"_itr","20000","_ts_rs","10000"
+		"_pr_a","50","_pr_p","100","_iter_cyc","10",
+		"_itr","10000","_ts_rs","10000"
 	};
 	cout << "This is the flexible job shop scheduling problem. " << rs << endl;
 #ifdef _WIN32
@@ -2181,8 +2298,18 @@ int main(int argc, char **argv)
 	for (int i = 1; i < argc; i += 2)
 		argv_map[string(argv[i])] = string(argv[i + 1]);
 	Instance *ins = new Instance(argv_map.at("_ifp") + argv_map.at("_ifn") + argv_map.at("_suffix"));
-	//ins->display_instance();
-	Solver *solver = new Solver(*ins, stoi(argv_map.at("_sol_num")));
+	string fnw = argv_map.at("_ifn") + 
+		"_iter_cyc" + argv_map.at("_iter_cyc") +
+		"_itr" + argv_map.at("_itr") +
+		"_tt0" + argv_map.at("_tt0") +
+		"_d1" + argv_map.at("_d1") +
+		"_d2" + argv_map.at("_d2") +
+		"_tt1" + argv_map.at("_tt1") +
+		"_d3" + argv_map.at("_d3") +
+		"_d4" + argv_map.at("_d4") +
+		"_r" + argv_map.at("_r2") + ".txt";
+	Solver *solver = new Solver(*ins, stoi(argv_map.at("_sol_num")), fnw);
+	solver->rand_seed = rs;
 	solver->tt0 = stoi(argv_map.at("_tt0"));
 	solver->d1 = stoi(argv_map.at("_d1"));
 	solver->d2 = stoi(argv_map.at("_d2"));
@@ -2195,12 +2322,15 @@ int main(int argc, char **argv)
 	solver->small_ptr_type = stoi(argv_map.at("_sptrt"));
 	solver->ts_iteraion = stoi(argv_map.at("_itr"));
 	solver->ts_restart = stoi(argv_map.at("_ts_rs"));
+	solver->pr_a = stoi(argv_map.at("_pr_a"));
+	solver->pr_p = stoi(argv_map.at("_pr_p"));
+	solver->iter_cyc = stoi(argv_map.at("_iter_cyc"));
 	solver->best_known_makespan = stoi(argv_map.at("_best_obj"));	// read solution
 	//solver->read_solution(1, argv_map.at("_sfp") + argv_map.at("_sfn") + argv_map.at("_suffix"));
 	//solver->init_solution1(1);
 	//solver->ts(10000);
 
-	solver->ITS();
+	solver->H2O();
 #ifdef _WIN32
 	system("pause");
 #endif
