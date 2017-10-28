@@ -13,7 +13,7 @@ using namespace std;
 #define MIN(x,y) (((x)<(y))?(x):(y))
 #define MAXN 52	// max job
 #define MAXM 50	// max machine	
-#define MAXS 10	// max solution
+#define MAXS 12	// max solution
 #define MAXO 60	// max operation
 template<typename T>
 void split_generic(vector<T> &v, const T & str, const T & delimiters) {
@@ -96,7 +96,14 @@ public:
 		Operation *tabu_oper[MAXO];	// the tabu block of operations from u to v
 		Tabu *front, *next;
 	};
-
+	class BestOptSolution
+	{
+	public: 
+		string ins_name, lb_ref, ub_ref, lb_date, ub_date;
+		int m, n, lb, ub;
+		BestOptSolution(string _ins, int _n, int _m, int _lb, string _lbr, string _lbd, int _ub, string _ubr, string _ubd) :
+			ins_name(_ins), n(_n), m(_m), lb(_lb), lb_ref(_lbr), lb_date(_lbd), ub(_ub), ub_ref(_ubr), ub_date(_ubd) {}
+	};
 	int sol_num;
 	//vector<Solution*> sol_vec;
 	vector<Operation*> critical_block_vec;
@@ -122,15 +129,16 @@ public:
 	int common_seq[2][MAXM][2 * MAXO];	// in path relinking
 
 	int tt0, d1, d2, tt1, d3, d4;	// for tabu tenure
-	int best_known_makespan, ts_iteraion, ts_restart;
+	int ts_iteraion, ts_restart;
 	int big_ptr, big_ptr_type, small_ptr, small_ptr_type;
 	int pr_a, pr_p, iter_cyc, rand_seed, gen, run_cnt, run_i, max_t;
 	map<string, string> argv_map;
+	map<string, BestOptSolution*> best_opt_map;
 
 	int ns_p_cnt, ns_a_cnt;
 	ofstream ofs;
-	string ofn;
-	Solver(const Instance &, int, string, map<string, string> &);
+	string ofn,instance_name;
+	Solver(const Instance &, int, string, map<string, string> &,string );
 	~Solver();
 	void display_machine_operation(int, int)const;
 	void read_solution(int, string);
@@ -251,7 +259,7 @@ Instance::Instance(string _ifn) :ifn(_ifn), total_num_operation(0)
 }
 Instance::~Instance()
 {
-	for (int job_i = 1; job_i <= n; job_i++)
+	/*for (int job_i = 1; job_i <= n; job_i++)
 	{
 		for (int oper_i = 1; oper_i <= job_vec[job_i]->num_oper; oper_i++)
 		{
@@ -262,7 +270,7 @@ Instance::~Instance()
 			delete job_vec[job_i]->oper_vec[oper_i];
 		}
 		delete job_vec[job_i];
-	}
+	}*/
 	for (int job_i = 1; job_i <= job_vec1.size() - 1; job_i++)
 		for (int oper_i = 1; oper_i <= job_vec1[job_i].size() - 1; oper_i++)
 			for (int proc_i = 1; proc_i <= job_vec1[job_i][oper_i].size() - 1; proc_i++)
@@ -307,7 +315,7 @@ void Instance::display_instance()const
 		}
 	}
 }
-Solver::Solver(const Instance &_instance, int _sol_num, string _ofn, map<string, string> &_argv_map) 
+Solver::Solver(const Instance &_instance, int _sol_num, string _ofn, map<string, string> &_argv_map,string _best_opt) 
 	:instance(&_instance), sol_num(_sol_num), ofn(_ofn), argv_map(_argv_map)
 {
 	for (int i = 0; i <= sol_num; i++)
@@ -335,11 +343,31 @@ Solver::Solver(const Instance &_instance, int _sol_num, string _ofn, map<string,
 			machine_oper_num[i][j] = 0;
 		}
 	}
+	ifstream ifs_best(_best_opt);
+	if (!ifs_best.is_open())
+	{
+		cout << _best_opt << endl;
+		perror("_best_opt"); exit(0);
+	}
+	string str_line;
+	vector<string>fields_vec;
+	while (getline(ifs_best, str_line))
+	{
+		split_generic<string>(fields_vec, str_line, "* \t");
+		if (str_line == ""||fields_vec.size()==1||fields_vec[0]=="Instance")
+			continue;
+		best_opt_map[fields_vec[0]] = new BestOptSolution(fields_vec[0],
+			stoi(fields_vec[1]), stoi(fields_vec[2]),
+			stoi(fields_vec[3]), fields_vec[4], fields_vec[5],
+			stoi(fields_vec[6]), fields_vec[7], fields_vec[8]);
+		//cout << str_line << endl;
+	}
+	ifs_best.close();
 	bool ofp_is_exist = true;
-	ifstream ifs_test(ofn);
-	if (!ifs_test.is_open())
+	ifs_best.open(ofn);
+	if (!ifs_best.is_open())
 		ofp_is_exist = false;
-	ifs_test.close();
+	ifs_best.close();
 	ofs.open(ofn, ios::app | ios::out);
 	ofs.setf(ios::fixed, ios::floatfield);
 	ofs.precision(6);
@@ -349,6 +377,7 @@ Solver::Solver(const Instance &_instance, int _sol_num, string _ofn, map<string,
 			ofs << iter->first << "\t" << iter->second << "\t";
 		ofs << endl;
 	}
+	instance_name = argv_map.at("_ifn");
 }
 Solver::~Solver()
 {
@@ -385,7 +414,7 @@ void Solver::read_solution(int sol_index, string ifn)
 	string str_line;
 	vector<string>fields_vec;
 	getline(ifs, str_line);
-	best_known_makespan = stoi(str_line);
+	//best_known_makespan = stoi(str_line);
 	int mach_i = 0;
 	while (getline(ifs, str_line))
 	{
@@ -405,7 +434,7 @@ void Solver::read_solution(int sol_index, string ifn)
 		machine_oper_num[sol_index][mach_i] = fields_vec.size();
 	}
 	calculate_r(sol_index);
-	if (best_known_makespan != makespan[sol_index])
+	if (best_opt_map.at(instance_name)->lb != makespan[sol_index])
 	{
 		cout << "ERROR: the solution given by the author is wrong." << endl;
 		system("pause");
@@ -773,7 +802,7 @@ void Solver::apply_permutation_move(int sol_index, int mach_i, int u, int v, MOV
 void Solver::update_permutation_tabu(int sol_index, int mach_i, int u, int v)
 {
 	Tabu *tabu = new Tabu();
-	int r1 = MAX((makespan[sol_index] - best_known_makespan) / d1, d2);	// optimize by making it global
+	int r1 = MAX((makespan[sol_index] - best_opt_map.at(instance_name)->lb) / d1, d2);	// optimize by making it global
 	tabu->tabu_iteration = permutation_iteration + tt0 + rand() % r1;
 	tabu->tabu_u = u;
 	tabu->tabu_oper_num = v - u + 1;
@@ -787,7 +816,7 @@ void Solver::update_permutation_tabu(int sol_index, int mach_i, int u, int v)
 }
 bool Solver::check_permutation_tabu(int sol_index, int mach_i, int u, int v, MOVE_TYPE move_type)// if u and v in tabu, return true, else return false
 {
-	int r1 = MAX((makespan[sol_index] - best_known_makespan) / d1, d2);
+	int r1 = MAX((makespan[sol_index] - best_opt_map.at(instance_name)->lb) / d1, d2);
 	for (Tabu *tabu = permutation_tabu_list[sol_index][mach_i]; tabu != NULL; tabu = tabu->next)
 	{
 		if (tabu->tabu_iteration <= permutation_iteration - r1) // not in tabu status
@@ -1201,7 +1230,7 @@ void Solver::tabu_search(int sol_cur, int sol_best)
 			/*if (global_iteration == 450226)
 			check_solution(sol_cur);*/
 			assignment_iteration += 1;
-			int r1 = MAX((makespan[sol_cur] - best_known_makespan) / d3, d4);	// optimize by making it global
+			int r1 = MAX((makespan[sol_cur] - best_opt_map.at(instance_name)->lb) / d3, d4);	// optimize by making it global
 			assignment_tabu_list[sol_cur][machine[sol_cur][min_mach_u_a][min_u_a]->job_i][machine[sol_cur][min_mach_u_a][min_u_a]->oper_job_i][min_mach_v_a] =
 				assignment_iteration + tt1 + rand() % r1;
 			apply_assign_move(sol_cur, min_mach_u_a, min_u_a, min_mach_v_a, min_v_a);
@@ -1347,7 +1376,7 @@ void Solver::H2O()
 			}
 
 			end_time = clock();
-			if ((end_time - start_time) / CLOCKS_PER_SEC > max_t || makespan[sol_best] == best_known_makespan)
+			if ((end_time - start_time) / CLOCKS_PER_SEC > max_t || makespan[sol_best] == best_opt_map.at(instance_name)->lb)
 				break;
 			/*cout << gen << "\t" << (end_time - start_time) / CLOCKS_PER_SEC << "\t" << no_move_cnt << "\t"
 			<< makespan[sol_best] << "\t"
@@ -1395,6 +1424,13 @@ void Solver::ITS()
 		//path_relinking(sol_p1, sol_best, sol_pr, 0);
 		//replace_solution(sol_p1, sol_pr);
 
+		if (makespan[sol_best] == best_opt_map.at(instance_name)->lb)
+		{
+#ifdef _WIN32
+			cout << "find the lower bound." << endl;
+#endif
+			return;
+		}
 #ifdef _WIN32
 		end_time = clock();
 		cout << ts_iter << "\t"
@@ -1407,7 +1443,7 @@ void Solver::ITS()
 #ifdef _WIN32
 	end_time = clock();
 	cout << permutation_iteration << "\t"
-		<< makespan[sol_p1] << "\t" << makespan[sol_best] << "\t" << best_known_makespan << "\t"
+		<< makespan[sol_p1] << "\t" << makespan[sol_best] << "\t" << best_opt_map.at(instance_name)->lb << "\t"
 		<< (end_time - start_time) / CLOCKS_PER_SEC
 		<< endl;
 #endif
@@ -2320,16 +2356,14 @@ int main(int argc, char **argv)
 	//rs = 1509107138;
 	srand(rs);
 	char *argv_win[] = { "",	// 0
-		"_ifp", "instances\\Dauzere_Data\\",	// instances\\Dauzere_Data\\ | instances\\DemirkolBenchmarksJobShop\\ 
-												//"_ifp", "instances\\Brandimarte_Data\\",	//Brandimarte_Data  Barnes
-												//"_ifp", "instances\\DemirkolBenchmarksJobShop\\",
+		"_ifp", "instances\\",	
 		"_sfp","solutions\\best_solutions\\",	// solution file path
 		"_ofp","solutions\\",	// solution output file path
-								//"_ifn", "seti5xyz",	"_suffix",".fjs", "_best_obj","1125",
-		"_ifn", "01a",	"_suffix",".fjs", "_best_obj","2505",	// 01a, .fjs | cscmax_20_15_1 .txt 
-																//"_ifn", "rcmax_40_20_2", "_suffix",".txt", "_best_obj","4691",
+		"_ifn", "vdata-car7",
+		"_suffix_ins",".fjs", "_suffix_sol",".txt",
 		"_sfn","dmu15_rcmax_30_15_1pb_3384",	// solution file name 
-		"_sol_num", "10", "_tt0","10", "_d1","5", "_d2", "12",	// 01a (2505) 03a (2228) rcmax_30_15_1(3343) rcmax_50_20_2(5621) rcmax_40_20_2(4691 ) rcmax_30_15_9(3430) rcmax_20_15_8(2669)
+		"_best_opt","best_opt_obj",
+		"_sol_num", "10", "_tt0","10", "_d1","5", "_d2", "12",
 		"_tt1","10", "_d3","5", "_d4", "12",
 		"_bptr","10","_bptrt","0","_sptr","4","_sptrt","0",
 		"_pr_a","50","_pr_p","100","_iter_cyc","10",
@@ -2341,12 +2375,31 @@ int main(int argc, char **argv)
 		argv_map[string(argv_win[i])] = string(argv_win[i + 1]);
 	for (int i = 1; i < argc; i += 2)
 		argv_map[string(argv[i])] = string(argv[i + 1]);
+	string dir[6] = { "\\","Barnes","Brandimarte_Data","Dauzere_Data","Hurink_Data","DemirkolBenchmarksJobShop" };
 #ifdef __linux__
 	replace_all(argv_map["_ifp"], "\\", "//");
 	replace_all(argv_map["_sfp"], "\\", "//");
 	replace_all(argv_map["_ofp"], "\\", "//");
+	replace_all(dir[0], "\\", "//");
 #endif
-	Instance *ins = new Instance(argv_map.at("_ifp") + argv_map.at("_ifn") + argv_map.at("_suffix"));
+	string ifn_ins = argv_map.at("_ifp");
+	string ifn_sol = argv_map.at("_sfp") + argv_map.at("_best_opt") + argv_map.at("_suffix_sol");
+	if (argv_map.at("_ifn").find("mt") !=string::npos|| argv_map.at("_ifn").find("set") != string::npos)
+		ifn_ins += dir[1]; 
+	else if (argv_map.at("_ifn").find("Mk") != string::npos)
+		ifn_ins += dir[2];
+	else if (argv_map.at("_ifn").find("data-") != string::npos)
+		ifn_ins += dir[4];
+	else if (argv_map.at("_ifn").find("max_") != string::npos)
+		ifn_ins += dir[5];
+	else  if (argv_map.at("_ifn").find("a") != string::npos)
+		ifn_ins += dir[3];
+	ifn_ins += dir[0] + argv_map.at("_ifn");
+	if (argv_map.at("_ifn").find("max_") != string::npos)
+		ifn_ins += argv_map.at("_suffix_sol");
+	else 
+		ifn_ins += argv_map.at("_suffix_ins");
+	Instance *ins = new Instance(ifn_ins);
 	string fnw = argv_map.at("_ofp") + argv_map.at("_ifn") +
 		"_iter_cyc" + argv_map.at("_iter_cyc") +
 		"_itr" + argv_map.at("_itr") +
@@ -2357,8 +2410,8 @@ int main(int argc, char **argv)
 		"_d3" + argv_map.at("_d3") +
 		"_d4" + argv_map.at("_d4") +
 		"_max_t" + argv_map.at("_max_t") +
-		"_ts_rs" + argv_map.at("_ts_rs") + ".txt";
-	Solver *solver = new Solver(*ins, stoi(argv_map.at("_sol_num")), fnw, argv_map);
+		"_ts_rs" + argv_map.at("_ts_rs") + argv_map.at("_suffix_sol");
+	Solver *solver = new Solver(*ins, stoi(argv_map.at("_sol_num")), fnw, argv_map, ifn_sol);
 	solver->rand_seed = rs;
 	solver->tt0 = stoi(argv_map.at("_tt0"));
 	solver->d1 = stoi(argv_map.at("_d1"));
@@ -2377,7 +2430,6 @@ int main(int argc, char **argv)
 	solver->iter_cyc = stoi(argv_map.at("_iter_cyc"));
 	solver->run_cnt = stoi(argv_map.at("_run_cnt"));
 	solver->max_t = stoi(argv_map.at("_max_t"));
-	solver->best_known_makespan = stoi(argv_map.at("_best_obj"));	// read solution
 	//solver->read_solution(1, argv_map.at("_sfp") + argv_map.at("_sfn") + argv_map.at("_suffix"));
 	//solver->init_solution1(1);
 	//solver->ts(10000);
